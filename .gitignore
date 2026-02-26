@@ -8,3 +8,8 @@ keystone_bid_tracker/config.json
 
 # Accidental nested-repo path
 keystone_bid_tracker/Keystone_bid_tracker/
+
+# Personal/local reference files (kept out of source control)
+_local/*
+!_local/.gitkeep
+!_local/README.md

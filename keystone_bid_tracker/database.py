@@ -4,8 +4,11 @@ All SQLite CRUD operations for bids, customers, revisions.
 """
 
 import sqlite3
+import logging
 from contextlib import contextmanager
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
@@ -16,11 +19,19 @@ class Database:
     def _conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         try:
             yield conn
             conn.commit()
+        except sqlite3.OperationalError as e:
+            conn.rollback()
+            if "database is locked" in str(e).lower():
+                raise RuntimeError(
+                    "The database is busy right now. Please wait a few seconds and try again."
+                ) from e
+            raise
         except Exception:
             conn.rollback()
             raise
@@ -103,8 +114,20 @@ class Database:
             for table, col, col_type in new_columns:
                 try:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-                except Exception:
-                    pass
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" in str(e).lower():
+                        continue
+                    logger.exception("Schema migration failed while adding %s.%s", table, col)
+                    raise
+
+            conn.executescript("""
+                CREATE INDEX IF NOT EXISTS idx_bids_status ON bids(status);
+                CREATE INDEX IF NOT EXISTS idx_bids_moraware_job_id ON bids(moraware_job_id);
+                CREATE INDEX IF NOT EXISTS idx_bids_moraware_job_status ON bids(moraware_job_status);
+                CREATE INDEX IF NOT EXISTS idx_bids_original_bid_date ON bids(original_bid_date);
+                CREATE INDEX IF NOT EXISTS idx_invoice_data_bid_id ON invoice_data(bid_id);
+                CREATE INDEX IF NOT EXISTS idx_bid_revisions_bid_id_revision_no ON bid_revisions(bid_id, revision_no);
+            """)
 
             conn.execute(
                 "UPDATE bids SET status='PENDING' WHERE status IN ('LOST', 'DEAD')"
