@@ -1,0 +1,118 @@
+
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><title>Activity Fields - Moraware Systemize</title><link rel='stylesheet' type='text/css' href='/include/3rdParty/normalize.x.css?v=5_0_1115' />
+<link rel='stylesheet' type='text/css' href='/include/uiv2jtstyle.x.css?v=5_0_1115' />
+<link rel='stylesheet' type='text/css' href='/include/Fonts/font-awesome.css?v=5_0_1115' />
+<link rel='stylesheet' type='text/css' href='/include/Fonts/foundation-icons.css?v=5_0_1115' />
+<link rel='stylesheet' type='text/css' href='/include/Fonts/ionicons.css?v=5_0_1115' />
+<link rel='stylesheet' type='text/css' href='/include/Fonts/MorawareIcons.css?v=5_0_1115' />
+<link href='//fonts.googleapis.com/css?family=Lato:400,300,600,700,800' rel='stylesheet' type='text/css'><link rel='shortcut icon' href='/graphics/v2icons/favicon.ico?v=5_0_1115' type='image/x-icon'/><link rel='icon' href='/graphics/v2icons/favicon-16x16.png?v=5_0_1115' sizes='16x16' type='image/png'/><link rel='icon' href='/graphics/v2icons/favicon-32x32.png?v=5_0_1115' sizes='32x32' type='image/png'/><link rel='icon' href='/graphics/v2icons/android-chrome-192x192.png?v=5_0_1115' sizes='192x192' type='image/png'/><link rel='apple-touch-icon' href='/graphics/v2icons/apple-touch-icon.png?v=5_0_1115' sizes='180x180' type='image/png'/><link rel='mask-icon' href='/graphics/v2icons/safari-pinned-tab.svg?v=5_0_1115' color='#5bbad5'/><link rel='manifest' href='/sys/include?&id=2&v=5_0_1115' crossOrigin='use-credentials'/><meta name='msapplication-config' content='/sys/include?id=3&v=5_0_1115' /><meta name='viewport' content='width=device-width, initial-scale=1.0' /><script type='text/javascript'>
+<!--
+var g_stickyTableHeadersScrollVersion=1;var isEnterpriseEdition=false,isInventoryEdition=true,isBasicEdition=false,g_currWebPageId=0,g_userId=29,g_incJDI=0,g_userName=unescape("Austin"),jtPrivAdmin=true,cgPrivAdmin=false,nvPrivAdmin=false,g_isInternalCGUser=0,g_isAccountCGUser=0,g_isInternalNVUser=0,g_JTAccessRights=unescape(''),g_CGAccessRights=unescape(''),g_NVAccessRights=unescape(''),g_IsExternalUser=false,g_ExternalUserId=0,dateFormatString="M/d/yyyy",g_isJTSystemize=1,g_isCounterGo=0,g_isCounterGoLicensed=1,g_isNVInventory=0,g_isNVInventoryLicensed=0,g_externalSlabDisplayNames={"productNameOnly":"Scanner Integration","singularSlabLabel":"Scanned Slab","multipleSlabsLabel":"Scanned Slabs","productQualifiedSingularSlabLabel":"Scanner Integration - Scanned Slab","productQualifiedPluralSlabLabel":"Scanner Integration - Scanned Slabs"},g_mapTextOverrides={},g_isUIV2=1,g_eePrefixToUse='EE-',g_cgPrefixToUse='',g_legInvPrefixToUse='',g_NVPrefixToUse='NV-',g_isOrderSupport=1,g_isPaymentTermsSupport=1,g_isMobile=0,g_isTablet=0,g_currencySymbol='$',g_strVer='5_0_1115',g_calMinSchedHour=5,g_calMaxSchedHour=23,g_enableKeyboardShortcuts=true,g_workDaysOfTheWeekBitmask=31;g_featureFlags='2,3,15,16,19,20,21,22,23,24,26,27,28,29,30,31,32,34,35,36,37,38,39,40,41,42,43,44,45,46,48,51,52';g_validImageFileExtensions=["bmp","gif","jpg","jpeg","png"];g_validImageFileTypesMessage='Valid File Extensions: .bmp, .gif, .jpg, .jpeg, .png';var g_arrStatuses='4|Auto-Schedule|0|%23990099|0|1|1?1|Estimate|1|Black|0|1|2?18|Ready%20to%20Schedule|1|%23ff44ff|0|0|2?13|Ready%20to%20Schedule%20KC|1|Teal|0|0|2?11|Pending|1|Orange|0|0|2?2|Confirmed/In%20Process|1|Green|0|1|2?3|Complete|1|Blue|0|1|3?17|Review|1|%23dd4411|0|0|2?5|Canceled|1|%23ee0000|0|1|4?12|Not%20Ready|1|%23aa0000|0|1|2?16|MULTIPLIER|1|%23bbbbbb|0|0|2'.split('?'),g_arrStatusesTS=new Date();var pageRemoteScripting=document.location.protocol + '//' + document.location.host + document.location.pathname;var arrPageJobDetail=[];var pageJobSummary_1='/sys/jobs?';arrPageJobDetail[1]='/sys/job/';var pageEditJobSettings_1='/?wp=13&jp=1';var pageJobSummary_9='/sys/jobs/9?';arrPageJobDetail[9]='/sys/job/';var pageEditJobSettings_9='/?wp=13&jp=9';var pageJobSummary_4='/sys/jobs/4?';arrPageJobDetail[4]='/sys/job/';var pageEditJobSettings_4='/?wp=13&jp=4';var g_jobProcesses=[{id:1,name:unescape('Job'),pluralName:unescape('Jobs'),inactive:false},{id:9,name:unescape('LeadTracker'),pluralName:unescape('LeadTracker'),inactive:false},{id:4,name:unescape('Quote'),pluralName:unescape('Quotes'),inactive:true}];
+-->
+</script>
+<script type='text/javascript' src='/sys/include?&amp;id=1&amp;ed=5&amp;v=5_0_1115'></script>
+<script type='text/javascript' src='/include/ClientFunctions.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/SiteSearch.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/Admin.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/date-picker.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/color-picker.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/RemoteScripting.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/TypeAheadPopup.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/dragdropsort.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/TextOverride.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/mwToolTipper.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/mjtCollections.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/Guider.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/UserDismissalFlags.js.htm?v=5_0_1115'></script>
+<script type='text/javascript' src='/include/FeatureFlags.js.htm?v=5_0_1115'></script>
+<script type='text/javascript'>
+<!--
+function handleSessionTimeout(strSessionKillReason_){return commonHandleSessionTimeout(strSessionKillReason_);}
+-->
+</script>
+<script type='text/javascript' src='/include/JobDetail.js.htm?v=5_0_1115'></script>
+<style type='text/css'>input[type="checkbox"]:checked {-webkit-filter: grayscale(100%) invert(100%) brightness(1.7); outline-color: white;}input[type="checkbox"]:checked:not(:focus-visible) {outline-style: solid; outline-width:1px; outline-offset:-1px}input[type="radio"] {-webkit-filter: grayscale(100%);}</style></head>
+<body class='baseJT  '>
+<div id='contextMenuPopUp' class='dialogDiv'></div><div id='contextSubmenuPopUp0' class='popupSubmenuDiv'></div><div id='contextSubmenuPopUp1' class='popupSubmenuDiv'></div><div id='contextSubmenuPopUp2' class='popupSubmenuDiv'></div><div id='contextSubmenuPopUp3' class='popupSubmenuDiv'></div><div id='contextSubmenuPopUp4' class='popupSubmenuDiv'></div><div id='contextSubmenuPopUp5' class='popupSubmenuDiv'></div><div id='contextSubmenuPopUp6' class='popupSubmenuDiv'></div><div id='dropIndicator1' style='position:absolute;z-index:9999;left:0px;top:0px;'></div><div id='dropIndicator2' style='position:absolute;z-index:9999;left:0px;top:0px;'></div><div id='typeAheadDiv' class='typeAheadBox' style='display:none;'></div><div id='dialogCover' class='uiv2dialogCover' style='display:none;'></div><div id='dynamicDialog'></div><div id='dynamicSubdialog'></div><div id='fixResizeDiv'></div><div id='pickerPopUp' class='dialogDiv'></div>
+
+<div id='v2Layout' class='v2Layout dataLevel1 selLevel1' data-actualLevel='1'>
+<div class='v2LeftNavContainer' id='v2LeftNavContainer' ><div class='clsV2MenuHolder' id='menuHolder' ><table class='clsV2MenuTable' cellpadding='0' cellspacing='0'><tr><td class='v2Menu level1'><ul><li class='v2MenuItem'><a class='clickable' href="/sys/jobs" >Jobs</a></li>
+<li class='v2MenuItem'><a class='clickable' href="/sys/jobs/9" >LeadTracker</a></li>
+<li class='v2MenuItem'><a class='clickable' href="/sys/calendar" >Calendar</a></li>
+<li class='v2MenuItem'><a class='clickable' href="/sys/pos" >Purchasing</a></li>
+<li class='v2MenuItem'><a class='clickable' href="/sys/inventory" >Inventory</a></li>
+<li class='v2MenuItem'><a class='clickable' href="/sys/reports/" >Reports</a></li>
+<li class='v2MenuItem root nav-emphasis'><a class='clickable' href="/sys/settings/" >Settings</a></li><li class='v2MenuItem interior'><a class='clickable' href="/sys/settings/job" >Job</a></li><li class='v2MenuItem leaf selected'><a class='clickable' href="/sys/settings/jobactivityfields/" >Activity Fields</a></li>
+
+
+<li class='v2MenuItem nav-emphasis' id='helpPageNavigationId'><a class='clickable' href="/sys/help" >Help</a></li>
+<li class='v2MenuItem nav-emphasis'><a class='clickable' href="/go/quotes" >CounterGo</a></li>
+<li class='v2MenuItem linkWithFontIcon'><a class='clickable' href="/sys/settings/mysettings/" ><span class="FontAwesomeIcon">&#62142;</span><span>Austin</span></a></li>
+<li data-pinned='1' id='btnPinMenu' class='FontAwesomeButton v2MenuItem' onclick='clickedPinMenu()' data-mwtooltip='Unpin Navigation'><span id='pinChar' class='pinned'></span></li><li><div id='guiderAdContainer'></div></li></ul></td></tr></table></div><!--End of menu Table-->
+</div>
+<div class='v2Content' id='divV2Content'>
+<div class='clsToolStripContainer settingsToolStrip' id='mainToolbar'><table id='pageToolStrip' class='clsToolStrip'><tr><td class=' clsToolstripHamburgerMenu' onclick="if(&#39;1&#39;==this.getAttribute(&#39;data-mjtdisabled&#39;)){return false;}clickedHamburger()" style='display:none'><div id='btnToolstripHamburgerMenu' class="FontAwesomeButton">&#61641;</div><div class='toolstripButtonText'></div></td><td class=' clsBtnTSSearch' onclick="if(&#39;1&#39;==this.getAttribute(&#39;data-mjtdisabled&#39;)){return false;}showV2SearchDialog(event)" data-MWTooltip='Search'><div id='btnTSSearch' class="FontAwesomeButton">&#61442;</div><div class='toolstripButtonText'>Search</div></td><td class='searchToolbarContainer'><div id='inlineSearchContainer' class='inlineSearch'><form id='frmV2Search' name='frmV2Search' action='#' href='#' onsubmit=''><span class='dlgControlSet inputContainer'><input type='hidden' name='searchCategoryId' value =''/><label class='toolbarSearchSelect'><select onchange='SiteSearch.resizeSelectToFitContents({&quot;controlId&quot;:&quot;searchCategoryIdSelect&quot;,&quot;hiddenOptionId&quot;:&quot;hiddenResizeOption&quot;,&quot;hiddenSelectId&quot;:&quot;hiddenResizeSelect&quot;,&quot;maxWidth&quot;:190})' id='searchCategoryIdSelect' name ='searchCategoryIdSelect' style ='width: 60px;'><option value=''>All</option><option value='SF2'>Accounts</option><option value='SF1P1'>Jobs</option><option value='SF1P9'>LeadTracker</option><option value='SF1P4'>Quotes</option><option value='SF8'>Quotes</option><option value='SF10'>Orders</option><option value='SF5'>Purchase Orders</option><option value='SF6'>Serial Numbers</option><option value='SF7'>Product Variants</option><option value='SF9'>Suppliers</option></select></label><select id='hiddenResizeSelect'><option id ='hiddenResizeOption'></option></select><span class="inlineSearchButton"><i class='icon-search'></i></span><input type='text' name='searchTerm' size='40' class='input-field' maxlength='80' autocomplete='off' placeholder='Search...'  onkeypress="return SiteSearch.submitV2SearchOnEnter(event,{&quot;formId&quot;:&quot;frmV2Search&quot;,&quot;preserveUrlParams&quot;:false});" onblur='handleTypeAheadTextBoxBlur()' onfocus='handleTypeAheadTextBoxFocus(event,"frmV2Search",{formId:"frmV2Search",textFieldName:"searchTerm",idFieldName:"typeAheadIdV2",fnGetTypeAheadData:SiteSearch.getInfoForSearchTypeAhead,getTypeAheadDataFnParameter:null,forceMatchItem:false,showTypeAheadWhenUnmatched:false,autoMatchOnKeyInput:false,typeAheadTableAdditionalClasses:"toolstrip-search-typeahead typeahead-with-borders",showAdditionalLastRow:true,noDataMessage:"No suggestions",forceTypeAheadOnFocus:true,forceImmediatePopup:true,handlingFocus:true,fnHandleExplicitSelection:selectedSearchItemInTypeAhead,explicitSelectionFnParameter:null})' oninput='handleTypeAheadTextBoxOnInput(event,"frmV2Search",{formId:"frmV2Search",textFieldName:"searchTerm",idFieldName:"typeAheadIdV2",fnGetTypeAheadData:SiteSearch.getInfoForSearchTypeAhead,getTypeAheadDataFnParameter:null,forceMatchItem:false,showTypeAheadWhenUnmatched:false,autoMatchOnKeyInput:false,typeAheadTableAdditionalClasses:"toolstrip-search-typeahead typeahead-with-borders",showAdditionalLastRow:true,noDataMessage:"No suggestions",forceTypeAheadOnFocus:true,fnHandleExplicitSelection:selectedSearchItemInTypeAhead,explicitSelectionFnParameter:null})' onkeydown='return handleTypeAheadTextBoxKeyDown(event,"frmV2Search",{formId:"frmV2Search",textFieldName:"searchTerm",idFieldName:"typeAheadIdV2",fnGetTypeAheadData:SiteSearch.getInfoForSearchTypeAhead,getTypeAheadDataFnParameter:null,forceMatchItem:false,showTypeAheadWhenUnmatched:false,autoMatchOnKeyInput:false,typeAheadTableAdditionalClasses:"toolstrip-search-typeahead typeahead-with-borders",showAdditionalLastRow:true,noDataMessage:"No suggestions",forceTypeAheadOnFocus:true,fnHandleExplicitSelection:selectedSearchItemInTypeAhead,explicitSelectionFnParameter:null},true)' />
+<input  name='typeAheadIdV2' id='typeAheadIdV2' type='hidden'/>
+
+<button type='button' data-MWUndraggable='' class='fontActionButton nowrap' onclick='SiteSearch.submitSearch({&quot;formId&quot;:&quot;frmV2Search&quot;,&quot;preserveUrlParams&quot;:false,&quot;customSearchCategoryId&quot;:&quot;searchCategoryIdSelect&quot;})' data-MWTooltip='Search'><span class="FontAwesomeIcon">&#61442;</span></button></span></form></div></td><td onclick="if(&#39;1&#39;==this.getAttribute(&#39;data-mjtdisabled&#39;)){return false;}showCreateAttributeType(event,9,null,null,&quot;&quot;,false)" data-MWTooltip='Create new activity field'><div class="FontAwesomeButton">&#61525;</div><div class='toolstripButtonText'>Create Field</div></td><td id='toolStripTitle' class='toolStripTitleHolder'><div class='toolStripTitle'>Activity Fields</div></td></tr></table></div><iframe name='upload_iframe' id='upload_iframe' onload='ImportUploadIFrameOnload();' style='width:800px;height:260px;display:none;'></iframe>
+<table cellpadding='2' cellspacing='0' class='tableStyle'><tr><td class='pageInfoCell' valign='top'><div class='helpText'>Activity Fields allow you to track additional information for each activity.  These fields display when you edit an activity from the Calendar, Job / LeadTracker / Quote Detail or Summary pages.</div><script type='text/javascript'>
+<!--
+registerScrollingTableHeader('ActivityAttributes',12);
+
+-->
+</script>
+<div id='ActivityAttributesHeadDiv' class='tableScrollHead'>
+<table id='ActivityAttributesHead' cellpadding='2' cellspacing='1' class='reportTable'><tbody class='headerRow'>
+<tr >
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a0","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Name&nbsp;&nbsp;&nbsp;</td>
+<td class='headerSortableCol sortSelected'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"d1","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))' style="text-align:right;">Sequence&nbsp;<span class="FontAwesomeTerseIcon">&#61656;</span></td>
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a2","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Data Type&nbsp;&nbsp;&nbsp;</td>
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a3","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Description&nbsp;&nbsp;&nbsp;</td>
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a4","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Status&nbsp;&nbsp;&nbsp;</td>
+</tr></tbody></table></div>
+<div id='ActivityAttributesBodyDiv'>
+<table id='ActivityAttributesBody' cellpadding='2' cellspacing='1' class='reportTable'>
+<colgroup><col /><col /><col /><col /><col /></colgroup><thead class='headerRow'><tr >
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a0","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Name&nbsp;&nbsp;&nbsp;</td>
+<td class='headerSortableCol sortSelected'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"d1","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))' style="text-align:right;">Sequence&nbsp;<span class="FontAwesomeTerseIcon">&#61656;</span></td>
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a2","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Data Type&nbsp;&nbsp;&nbsp;</td>
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a3","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Description&nbsp;&nbsp;&nbsp;</td>
+<td class='headerSortableCol'  mjtclick='promptToSortPageWithUrl(event,null,null,unescape(""),"a4","/sys/settings/jobactivityfields/?&amp;cstFld9sort=",true,false,unescape("cstFld9"))'>Status&nbsp;&nbsp;&nbsp;</td>
+</tr></thead><tbody>
+<tr class='oddRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,75,0)' >Arrival Window</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,75)'  style="text-align:right;">1</td><td>Text</td><td></td><td>Active</td></tr>
+<tr class='evenRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,71,0)' >TP Code</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,71)'  style="text-align:right;">2</td><td>Number</td><td></td><td>Active</td></tr>
+<tr class='oddRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,72,0)' >Activity SqFt</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,72)'  style="text-align:right;">3</td><td>Number</td><td></td><td>Active</td></tr>
+<tr class='evenRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,96,0)' >Lineal Ft</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,96)'  style="text-align:right;">4</td><td>Number</td><td></td><td>Active</td></tr>
+<tr class='oddRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,265,0)' >HOS</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,265)'  style="text-align:right;">5</td><td>Text</td><td>Hours On Site</td><td>Active</td></tr>
+<tr class='evenRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,83,0)' >Material Allocation/Location/*Vendor*</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,83)'  style="text-align:right;">6</td><td>Multi-line text</td><td></td><td>Active</td></tr>
+<tr class='oddRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,290,0)' >*Special Pricing*</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,290)'  style="text-align:right;">7</td><td>List of values</td><td></td><td>Active</td></tr>
+<tr class='evenRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,94,0)' ><span class='inactiveItem'>3/4&quot; Substrate Sheet Qty</span></td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,94)'  style="text-align:right;"><span class='inactiveItem'>8</span></td><td><span class='inactiveItem'>Number</span></td><td><span class='inactiveItem'></span></td><td><div class='inactiveItem'>Inactive</div></td></tr>
+<tr class='oddRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,95,0)' ><span class='inactiveItem'>1&quot; Substrate Sheet Qty</span></td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,95)'  style="text-align:right;"><span class='inactiveItem'>9</span></td><td><span class='inactiveItem'>Number</span></td><td><span class='inactiveItem'></span></td><td><div class='inactiveItem'>Inactive</div></td></tr>
+<tr class='evenRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,84,0)' ><span class='inactiveItem'>Material Ordered/Status</span></td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,84)'  style="text-align:right;"><span class='inactiveItem'>10</span></td><td><span class='inactiveItem'>List of values</span></td><td><span class='inactiveItem'></span></td><td><div class='inactiveItem'>Inactive</div></td></tr>
+<tr class='oddRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,85,0)' ><span class='inactiveItem'>Material ETA</span></td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,85)'  style="text-align:right;"><span class='inactiveItem'>11</span></td><td><span class='inactiveItem'>Text</span></td><td><span class='inactiveItem'></span></td><td><div class='inactiveItem'>Inactive</div></td></tr>
+<tr class='evenRow'><td class='linkedCell' mjtclick='showEditAttributeType(event,311,0)' >Geofence HOS (test)</td><td class='linkedCell' mjtclick='showReorderCustomAttributes(event,9,&#39;&#39;,311)'  style="text-align:right;">12</td><td>Number</td><td></td><td>Active</td></tr>
+</tbody></table>
+</div>
+
+<div id='ActivityAttributesPagingDiv' class='tableScrollPaging' data-pages='1'>
+<span class='nowrap'><span class='pageRecordCountOnly'>(Rows 1 to 12 of 12)</span></span>
+</div>
+
+<div id='ActivityAttributesFixedPagingDiv' class='tableFixedPaging'>
+<span class='nowrap'><span class='pageRecordCountOnly'>(Rows 1 to 12 of 12)</span></span>
+</div>
+<br /></td></tr></table>
+
+<script>
+
+</script>
+
+</div><!-- End of v2Content -->
+</div><!-- End of v2Layout -->
+<script type='text/javascript'>
+<!--
+recalculatePageLayout();AddOnloadInitializationCode("initializePinCookiePath('/')");AddOnloadInitializationCode('g_GuiderManager.onload()');AddOnloadInitializationCode(SiteSearch.dispatchSearchCategorySelectOnChangeEvent);
+-->
+</script>
+<!-- Copyright 2002-2026 Moraware, Inc.  All rights reserved. --></body></html>

@@ -1,0 +1,7 @@
+PyQt5>=5.15.0
+openpyxl>=3.1.0
+matplotlib>=3.7.0
+pyinstaller>=6.0.0
+thefuzz>=0.20.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
