@@ -1,4 +1,15 @@
-# HANDOFF.md — Moraware Integration Fixes
+# HANDOFF.md (Legacy Archive)
+
+> Status: Legacy historical handoff notes.
+>
+> Canonical current context now lives in:
+> - `PROJECT_CONTEXT.md` (current architecture + constraints)
+> - `SESSION_NOTES.md` (rolling recent session ledger)
+> - `AGENTS.md` (stable operating contract)
+>
+> Use this file only as background history.
+
+# HANDOFF.md — Moraware Integration Fixes (Archived)
 
 ## Session Summary
 
