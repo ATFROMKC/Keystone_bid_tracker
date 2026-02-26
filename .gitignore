@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+
+.cursor/
+
+# Local app/runtime configuration
+keystone_bid_tracker/config.json
+
+# Accidental nested-repo path
+keystone_bid_tracker/Keystone_bid_tracker/
