@@ -7,6 +7,15 @@
 - Entry point: `keystone_bid_tracker/main.py`
 - Current app version constant: `1.0.0`
 
+## Current vs Historical Docs
+
+- Source of truth order:
+  1. code in `keystone_bid_tracker/`
+  2. `PROJECT_CONTEXT.md`
+  3. `SESSION_NOTES.md`
+  4. historical docs (`HANDOFF.md`, old specs/notes)
+- Use `HANDOFF.md` as archive context only, not present-state architecture.
+
 ## Current Architecture
 
 - Three-portal model is active:
@@ -34,88 +43,95 @@
 
 ## PM Portal — Current Tab Structure
 
-- The PM portal currently has one tab: **Job Manager** (`ui/awarded_tab.py` — `AwardedTab` class).
-- The Job Manager shows all WON bids with invoice tracking, Moraware sync, and a
-  detail expansion panel (`AwardedDetailPanel`).
-- Two things to never touch during the Commercial Notebook build unless explicitly asked:
-  - `InvoiceSyncWorker` and the Moraware invoice sync logic in `awarded_tab.py`
-  - `AwardedDetailPanel` — the expandable detail panel below the job list
+- The PM portal currently has three tabs:
+  - **Active Jobs** (`ui/pm_active_jobs_tab.py` — `PMActiveJobsTab`)
+  - **Pending Award** (`ui/pm_pending_award_tab.py` — `PMPendingAwardTab`)
+  - **Completed History** (`ui/pm_history_tab.py` — `PMHistoryTab`)
+- PM tab wiring lives in `ui/main_window.py`.
+- `ui/awarded_tab.py` is still important, but now mostly provides shared PM components:
+  - `AwardedDetailPanel`
+  - `InvoiceSyncWorker`
+  - `PMEditJobDialog`
 
 ## Active Build: Commercial Notebook PM Features
 
-The PM portal is being extended to recreate the value of an older internal app called
-the "Commercial Project Notebook." The full spec and Cursor prompts live in:
+The PM build moved from a single Job Manager view to a split workflow:
 
-  `Commercial_Notebook_Cursor_Roadmap.docx`
+1. **Active Jobs** (Moraware-driven list with local bid link overlay)
+2. **Pending Award** (local WON bids not yet linked to Moraware)
+3. **Completed History** (monthly invoice-complete rollups)
 
-### What is being added (4 phases, do in order):
+Current PM refresh semantics:
 
-**Phase 1 — Schema + Auto-Stats** (`database.py` only)
-- Add 3 columns to bids table via the existing `new_columns` migration pattern:
-  `est_complete_date TEXT`, `est_complete_date_manual INTEGER DEFAULT 0`, `notebook_notes TEXT`
-- Add 5 new query methods: `get_pm_notebook_status()`, `get_pm_job_type()`,
-  `get_pm_overview_stats()`, `get_pm_monthly_report()`, `get_pm_report_years()`
-- Update `upsert_invoice_data()` to auto-write `est_complete_date` from MAX(install_date),
-  respecting the manual override flag
-- Status: NOT STARTED
-
-**Phase 2 — Job Manager Upgrades** (`awarded_tab.py` only)
-- Row color coding: Pending jobs = light salmon, Active jobs = default
-- Two new grid columns: Job Type (derived from phase names), Est Complete
-- Job Type filter dropdown (client-side filtering)
-- Right-click context menu: Edit Job, Open in Moraware, Move Back to Bidding
-- Export to Excel button
-- Status: NOT STARTED
-
-**Phase 3 — Overview Dashboard Tab** (new file: `ui/pm_overview_tab.py` + `ui/main_window.py`)
-- New `PMOverviewTab` class with 6 summary panels:
-  1. Current Month Dollar (Complete / Projected / Total by SS and Stone)
-  2. Current Month Square Feet — most important panel, highlight visually
-  3. Pipeline by Job Type ($)
-  4. Pipeline by Job Type (SF)
-  5. PM Overview: Current Month
-  6. PM Overview: All Active Jobs
-- Wire into PMWindow as the first tab (Overview, Job Manager, Reports)
-- Status: NOT STARTED
-
-**Phase 4 — Reports Tab** (new file: `ui/pm_reports_tab.py` + `ui/main_window.py`)
-- New `PMReportsTab` class
-- Month/Year + PM + Job Type filters
-- Report Total prominently displayed
-- Invoice ledger driven by complete invoice_data phases
-- Export to Excel
-- Wire into PMWindow as the third tab
-- Status: NOT STARTED
+- `Reload Job List` = refresh Moraware list in `Active Jobs` only (no local metadata writes)
+- `Refresh Job` / `Refresh All Jobs` = refresh linked local bid metadata + invoice data
 
 ### Key data logic rules (read before prompting on any phase):
+
+Some rules below describe pipeline/notebook logic that still exists in code but is not
+the primary PM portal entry flow (which is now Active Jobs / Pending Award / Completed History).
 
 - **Job Type** is DERIVED, not stored. Check `invoice_data.phase` names:
   phases starting with 'SS' = Solid Surface, 'ST' = Stone. Both = Mixed.
   Fallback: check `solid_surf_sf` vs `stone_sf` on latest `bid_revision`.
 
-- **Active vs Pending** is DERIVED from `invoice_data`:
-  Active = at least one phase has a non-null `template_date`.
-  Pending = no `template_date` on any phase.
+- **PM Active Jobs status** is Moraware-driven:
+  rows are pulled from Moraware status buckets (`Active`, `Unscheduled`, `30+ Days Old`).
+
+- **Pending Award** is local:
+  `status='WON'` and no linked `moraware_job_id`.
+
+- **Legacy stage filters** (`Not Started` / `In Progress` / `Complete`) were part
+  of the older PM Job Manager flow and are retained as historical context only.
 
 - **est_complete_date** auto-populates from MAX(`install_date`) across invoice phases
   during every Moraware sync. If `est_complete_date_manual = 1`, sync skips the write.
 
+- **est_start_month** is user-set month-level forecast input (`YYYY-MM-01`) used for
+  scheduling estimates on unscheduled jobs (no Moraware template date); assigning it does not
+  remove a job from Unscheduled visibility.
+
 - **Complete this month** = phase `invoice_status='Complete'` AND `invoice_date` in
   current month.
 
-- **Projected this month** = `est_complete_date` in current month AND no complete phase yet.
+- **Pipeline forecasting** uses estimated start (`est_start_month`) for unscheduled jobs and
+  actual first template date for active jobs; it does not rely on `est_complete_date`.
+
+- **Combined invoice activities** (e.g., `ST1, ST2`) are reconciled onto the matching
+  Job Ticket A phase rows (`ST1`, `ST2`) instead of creating a synthetic combined row.
+  Per-phase TP code remains from Job Ticket A unless missing.
+
+- **Invoice status writes**: only actual Invoice activity rows set `invoice_status` /
+  `invoice_date`; Template/Install/Contact activity rows do not downgrade completed phases.
+
+- **Complete checks in aggregates/reports** use normalized matching
+  (`LOWER(TRIM(COALESCE(invoice_status,''))) = 'complete'`) to avoid case/whitespace drift.
 
 - **Reports tab** shows jobs when they have at least one complete invoice phase with
   `invoice_date` in the selected month. Report Total = SUM of `tp_code` for those phases.
   No manual invoice_date field needed on bids.
 
+- **Moraware created date** is tracked separately in `bids.moraware_created_date`
+  when job details are available, instead of overloading `moraware_job_date`.
+
+- **Date Won canonical field** is `bids.won_date`:
+  - Backfill rule: if `won_date` is blank and `moraware_created_date` exists, use `moraware_created_date`.
+  - Clamp rule: if both exist and `won_date > moraware_created_date`, set `won_date = moraware_created_date`.
+  - `moraware_job_date` remains legacy/compatibility only.
+
+- **Rolling forecast window** is computed from `today` through `today + 90 days`
+  and includes each overlapping month bucket in the Pipeline tab.
+
+- **90+ view** is a single aggregate bucket beyond the rolling 90-day window.
+
+- **Pipeline forecast math** uses Moraware-linked invoice data rollups (`invoice_data.tp_code`,
+  `invoice_data.sq_ft`) and excludes unsynced jobs from totals.
+
 ### What is NOT changing during this build:
 
 - Portal architecture (Hub / Estimator / PM switching)
 - Database initialization and path behavior
-- `InvoiceSyncWorker` in `awarded_tab.py`
-- `AwardedDetailPanel`
-- `MarkWonDialog` (minor addition of `est_complete_date` field in Phase 1, that's all)
+- `AwardedDetailPanel` as the shared PM detail component (still reused from `awarded_tab.py`)
 - Moraware source-of-truth order
 - Estimator portal, Hub portal, or any Estimator-side tabs
 
@@ -145,4 +161,5 @@ the "Commercial Project Notebook." The full spec and Cursor prompts live in:
 - Make smallest possible change to satisfy each request.
 - Prefer clear docs updates when behavior changes.
 - If architecture decisions change, update this file in the same session.
-- At the end of each coding session, append a new entry to `SESSION_NOTES.md`.
+- At the end of each coding session, ask exactly: "should I append a concise entry to session_notes.md?"
+- If the user says yes, append a new entry to `SESSION_NOTES.md`. If no, do nothing.

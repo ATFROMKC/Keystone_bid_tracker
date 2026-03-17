@@ -4,17 +4,20 @@ Shows WON bids with invoice tracking, Moraware sync, and detail expansion.
 """
 
 import os
+import webbrowser
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLineEdit, QLabel, QComboBox, QHeaderView, QFrame,
-    QAbstractItemView, QMessageBox, QProgressDialog, QTextEdit,
+    QAbstractItemView, QMessageBox, QProgressDialog, QTextEdit, QDialog,
+    QFormLayout, QDateEdit, QCheckBox, QMenu,
     QApplication,
 )
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QDate
+from PyQt5.QtGui import QColor
 
-from styles.theme import COLORS
 from config import get_config
 from ui.mark_won_dialog import MarkWonDialog
 
@@ -42,7 +45,7 @@ class StatCard(QFrame):
 
 
 class InvoiceSyncWorker(QThread):
-    """Background thread to sync invoice data from Moraware."""
+    """Background thread to refresh linked Moraware invoice + metadata data."""
     progress = pyqtSignal(int, int)
     finished = pyqtSignal(int, int)
     error = pyqtSignal(str)
@@ -64,39 +67,287 @@ class InvoiceSyncWorker(QThread):
                 self.error.emit("Moraware credentials not configured. Go to Settings.")
                 return
 
-            client = MorewareClient(username, password, base_url)
+            client = MorewareClient(username, password, base_url, use_fast_sync=True)
             client.login()
 
             if self.single_bid_id:
                 bid = self.db.get_bid_by_id(self.single_bid_id)
-                if not bid or not bid.get("moraware_job_id"):
+                if not bid:
+                    self.error.emit("Bid not found.")
+                    return
+                links = self.db.get_bid_moraware_links(self.single_bid_id)
+                if not links:
                     self.error.emit("This bid has no Moraware Job ID linked.")
                     return
-                phases = client.get_invoice_data(bid["moraware_job_id"])
+
+                linked_jobs = []
+                primary_job_id = ""
+                for link in links:
+                    job_id = str((link or {}).get("moraware_job_id") or "").strip()
+                    if not job_id:
+                        continue
+                    linked_jobs.append({"bid_id": self.single_bid_id, "moraware_job_id": job_id})
+                    if not primary_job_id and int((link or {}).get("is_primary") or 0) == 1:
+                        primary_job_id = job_id
+                if not linked_jobs:
+                    self.error.emit("This bid has no Moraware Job ID linked.")
+                    return
+
+                result = client.sync_invoice_data_fast(
+                    linked_jobs=linked_jobs,
+                    progress_cb=lambda i, total: self.progress.emit(i, total),
+                )
+                rows_by_job_id = result.get("rows_by_job_id", {}) or {}
+                phases = []
+                for link in links:
+                    job_id = str((link or {}).get("moraware_job_id") or "").strip()
+                    if not job_id:
+                        continue
+                    for row in (rows_by_job_id.get(job_id, []) or []):
+                        payload = dict(row)
+                        payload["moraware_job_id"] = job_id
+                        phases.append(payload)
                 self.db.upsert_invoice_data(self.single_bid_id, phases)
-                job_status = client.get_job_status(bid["moraware_job_id"])
+
+                if not primary_job_id:
+                    primary_job_id = str((bid.get("moraware_job_id") or "")).strip()
+                meta = (result.get("meta_by_job_id", {}) or {}).get(primary_job_id, {}) or {}
+                job_status = (meta.get("status") or "").strip()
                 if job_status in ("Active", "Complete"):
                     self.db.set_moraware_job_status(self.single_bid_id, job_status)
                 else:
                     self.db.set_moraware_sync_timestamp(self.single_bid_id)
+
+                self.db.refresh_bid_moraware_metadata(
+                    self.single_bid_id,
+                    job_number=(meta.get("job_number") or "").strip(),
+                    created_date=(meta.get("created_date") or "").strip(),
+                    salesperson=(meta.get("salesperson") or "").strip(),
+                    project_manager=(meta.get("project_manager") or "").strip(),
+                )
                 self.finished.emit(1, len(phases))
             else:
-                bids = self.db.get_won_bids_with_moraware_id()
+                bids = self.db.get_won_bids_with_moraware_links()
+                linked_jobs = []
+                for b in bids:
+                    for link in b.get("moraware_links") or []:
+                        job_id = str((link or {}).get("moraware_job_id") or "").strip()
+                        if not job_id:
+                            continue
+                        linked_jobs.append({"bid_id": b["id"], "moraware_job_id": job_id})
+
+                result = client.sync_invoice_data_fast(
+                    linked_jobs=linked_jobs,
+                    progress_cb=lambda i, total: self.progress.emit(i, total),
+                )
+                rows_by_job_id = result.get("rows_by_job_id", {}) or {}
+                meta_by_job_id = result.get("meta_by_job_id", {}) or {}
+
                 total_phases = 0
-                for i, bid in enumerate(bids):
-                    self.progress.emit(i + 1, len(bids))
-                    phases = client.get_invoice_data(bid["moraware_job_id"])
-                    self.db.upsert_invoice_data(bid["id"], phases)
-                    job_status = client.get_job_status(bid["moraware_job_id"])
+                for b in bids:
+                    links = b.get("moraware_links") or []
+                    if not links:
+                        continue
+                    merged_phases = []
+                    primary_job_id = ""
+                    for link in links:
+                        job_id = str((link or {}).get("moraware_job_id") or "").strip()
+                        if not job_id:
+                            continue
+                        if not primary_job_id and int((link or {}).get("is_primary") or 0) == 1:
+                            primary_job_id = job_id
+                        job_rows = rows_by_job_id.get(job_id, []) or []
+                        for row in job_rows:
+                            payload = dict(row)
+                            payload["moraware_job_id"] = job_id
+                            merged_phases.append(payload)
+                    if not primary_job_id:
+                        primary_job_id = str(b.get("moraware_job_id") or "").strip()
+
+                    self.db.upsert_invoice_data(b["id"], merged_phases)
+                    total_phases += len(merged_phases)
+
+                    meta = meta_by_job_id.get(primary_job_id, {}) or {}
+                    job_status = (meta.get("status") or "").strip()
                     if job_status in ("Active", "Complete"):
-                        self.db.set_moraware_job_status(bid["id"], job_status)
+                        self.db.set_moraware_job_status(b["id"], job_status)
                     else:
-                        self.db.set_moraware_sync_timestamp(bid["id"])
-                    total_phases += len(phases)
+                        self.db.set_moraware_sync_timestamp(b["id"])
+
+                    self.db.refresh_bid_moraware_metadata(
+                        b["id"],
+                        job_number=(meta.get("job_number") or "").strip(),
+                        created_date=(meta.get("created_date") or "").strip(),
+                        salesperson=(meta.get("salesperson") or "").strip(),
+                        project_manager=(meta.get("project_manager") or "").strip(),
+                    )
                 self.finished.emit(len(bids), total_phases)
 
         except Exception as e:
             self.error.emit(str(e))
+
+
+class PMEditJobDialog(QDialog):
+    """PM-only Edit Job dialog (kept separate from MarkWonDialog)."""
+
+    def __init__(self, db, bid_id, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.bid_id = bid_id
+        self.bid = self.db.get_bid_by_id(bid_id)
+
+        self.selected_customer_id = None
+        self.salesperson = ""
+        self.project_manager = ""
+        self.won_date = ""
+        self.moraware_job_date = ""
+        self.won_notes = ""
+        self.est_complete_date = None
+        self.est_complete_date_manual = None
+        self.est_start_month = None
+
+        self.setWindowTitle("Edit Job")
+        self.setMinimumWidth(460)
+        self.setModal(True)
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 14)
+        layout.setSpacing(10)
+
+        title = QLabel("Edit Job")
+        title.setObjectName("headingLabel")
+        layout.addWidget(title)
+
+        bid_name = QLabel((self.bid or {}).get("bid_name") or "")
+        bid_name.setObjectName("subheadingLabel")
+        layout.addWidget(bid_name)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.account_input = QComboBox()
+        customers = self.db.get_bid_customers(self.bid_id)
+        for customer in customers:
+            self.account_input.addItem(customer["name"], customer["id"])
+        won_customer_id = (self.bid or {}).get("won_customer_id")
+        if won_customer_id:
+            idx = self.account_input.findData(won_customer_id)
+            if idx >= 0:
+                self.account_input.setCurrentIndex(idx)
+        form.addRow("Winning account:", self.account_input)
+
+        self.salesperson_input = QComboBox()
+        self.salesperson_input.setEditable(True)
+        self.salesperson_input.setInsertPolicy(QComboBox.NoInsert)
+        self.salesperson_input.addItem("")
+        for sp in self.db.get_salespersons():
+            self.salesperson_input.addItem(sp)
+        self.salesperson_input.setCurrentText((self.bid or {}).get("salesperson") or "")
+        form.addRow("Salesperson:", self.salesperson_input)
+
+        self.pm_input = QComboBox()
+        self.pm_input.setEditable(True)
+        self.pm_input.setInsertPolicy(QComboBox.NoInsert)
+        self.pm_input.addItem("")
+        for pm in self.db.get_project_managers():
+            self.pm_input.addItem(pm)
+        self.pm_input.setCurrentText((self.bid or {}).get("project_manager") or "")
+        form.addRow("Project manager:", self.pm_input)
+
+        self.won_date_input = QDateEdit()
+        self.won_date_input.setCalendarPopup(True)
+        self.won_date_input.setDisplayFormat("MM/dd/yyyy")
+        self.won_date_input.setDate(QDate.currentDate())
+        existing_won_date = (self.bid or {}).get("won_date")
+        if existing_won_date:
+            won_date = QDate.fromString(existing_won_date, "yyyy-MM-dd")
+            if won_date.isValid():
+                self.won_date_input.setDate(won_date)
+        form.addRow("Date won:", self.won_date_input)
+
+        self.est_complete_manual_input = QCheckBox("Manually set estimated completion date")
+        self.est_complete_date_input = QDateEdit()
+        self.est_complete_date_input.setCalendarPopup(True)
+        self.est_complete_date_input.setDisplayFormat("MM/dd/yyyy")
+        self.est_complete_date_input.setDate(QDate.currentDate())
+        existing_est_date = (self.bid or {}).get("est_complete_date")
+        if existing_est_date:
+            est_date = QDate.fromString(existing_est_date, "yyyy-MM-dd")
+            if est_date.isValid():
+                self.est_complete_date_input.setDate(est_date)
+
+        manual_flag = int((self.bid or {}).get("est_complete_date_manual") or 0) == 1
+        self.est_complete_manual_input.setChecked(manual_flag)
+        self.est_complete_date_input.setEnabled(manual_flag)
+        self.est_complete_manual_input.toggled.connect(self.est_complete_date_input.setEnabled)
+        form.addRow(self.est_complete_manual_input)
+        form.addRow("Est. complete date:", self.est_complete_date_input)
+
+        self.est_start_month_manual_input = QCheckBox("Set estimated start month for not-started forecast")
+        self.est_start_month_input = QDateEdit()
+        self.est_start_month_input.setCalendarPopup(True)
+        self.est_start_month_input.setDisplayFormat("MM/yyyy")
+        self.est_start_month_input.setDate(QDate.currentDate())
+        existing_start_month = (self.bid or {}).get("est_start_month")
+        if existing_start_month:
+            start_month = QDate.fromString(existing_start_month, "yyyy-MM-dd")
+            if start_month.isValid():
+                self.est_start_month_input.setDate(start_month)
+        has_start_month = bool((existing_start_month or "").strip())
+        self.est_start_month_manual_input.setChecked(has_start_month)
+        self.est_start_month_input.setEnabled(has_start_month)
+        self.est_start_month_manual_input.toggled.connect(self.est_start_month_input.setEnabled)
+        form.addRow(self.est_start_month_manual_input)
+        form.addRow("Est. start month:", self.est_start_month_input)
+
+        self.won_notes_input = QTextEdit()
+        self.won_notes_input.setMaximumHeight(80)
+        self.won_notes_input.setPlainText((self.bid or {}).get("won_notes") or "")
+        form.addRow("Won notes:", self.won_notes_input)
+
+        layout.addLayout(form)
+        layout.addStretch()
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+        save_btn = QPushButton("Save Changes")
+        save_btn.setObjectName("successButton")
+        save_btn.clicked.connect(self._on_confirm)
+        btn_row.addWidget(save_btn)
+        layout.addLayout(btn_row)
+
+    def _on_confirm(self):
+        if self.account_input.count() == 0:
+            QMessageBox.warning(self, "Missing account", "No accounts linked to this bid.")
+            return
+
+        self.selected_customer_id = self.account_input.currentData()
+        self.salesperson = self.salesperson_input.currentText().strip()
+        self.project_manager = self.pm_input.currentText().strip()
+        self.won_date = self.won_date_input.date().toString("yyyy-MM-dd")
+        # Backward-compatible alias for older update paths.
+        self.moraware_job_date = self.won_date
+        self.won_notes = self.won_notes_input.toPlainText().strip()
+
+        if self.est_complete_manual_input.isChecked():
+            self.est_complete_date = self.est_complete_date_input.date().toString("yyyy-MM-dd")
+            self.est_complete_date_manual = 1
+        else:
+            self.est_complete_date = None
+            self.est_complete_date_manual = None
+
+        if self.est_start_month_manual_input.isChecked():
+            selected = self.est_start_month_input.date()
+            self.est_start_month = QDate(selected.year(), selected.month(), 1).toString("yyyy-MM-dd")
+        else:
+            self.est_start_month = ""
+
+        self.accept()
 
 
 class AwardedTab(QWidget):
@@ -157,11 +408,6 @@ class AwardedTab(QWidget):
         self.pm_combo.currentIndexChanged.connect(self._on_filter_changed)
         filt.addWidget(self.pm_combo)
 
-        self.year_combo = QComboBox()
-        self.year_combo.setMinimumWidth(100)
-        self.year_combo.currentIndexChanged.connect(self._on_filter_changed)
-        filt.addWidget(self.year_combo)
-
         self.mw_sync_combo = QComboBox()
         self.mw_sync_combo.setMinimumWidth(120)
         self.mw_sync_combo.addItems(["All", "Synced", "Not Synced"])
@@ -175,6 +421,16 @@ class AwardedTab(QWidget):
         self.mw_status_combo.setToolTip("Moraware job status for synced jobs only.")
         self.mw_status_combo.currentIndexChanged.connect(self._on_filter_changed)
         filt.addWidget(self.mw_status_combo)
+
+        self.job_type_combo = QComboBox()
+        self.job_type_combo.setMinimumWidth(130)
+        self.job_type_combo.currentIndexChanged.connect(self._on_filter_changed)
+        filt.addWidget(self.job_type_combo)
+
+        self.stage_combo = QComboBox()
+        self.stage_combo.setMinimumWidth(130)
+        self.stage_combo.currentIndexChanged.connect(self._on_filter_changed)
+        filt.addWidget(self.stage_combo)
 
         clear_btn = QPushButton("Clear Filters")
         clear_btn.clicked.connect(self._clear_filters)
@@ -192,6 +448,10 @@ class AwardedTab(QWidget):
         self.sync_btn.clicked.connect(self._on_sync_all)
         filt.addWidget(self.sync_btn)
 
+        self.export_btn = QPushButton("Export to Excel")
+        self.export_btn.clicked.connect(self._on_export_excel)
+        filt.addWidget(self.export_btn)
+
         layout.addLayout(filt)
         helper = QLabel("Status filters apply to synced jobs. Red sync button means current filtered rows need refresh.")
         helper.setObjectName("secondaryLabel")
@@ -199,10 +459,10 @@ class AwardedTab(QWidget):
 
         # --- Table ---
         self.table = QTableWidget()
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
             "#", "Date Won", "Job Name", "Account", "Salesperson",
-            "PM", "Bid Total", "Invoice Status", "Moraware Date"
+            "PM", "Job Type", "Bid Total", "Invoice Status", "Est Complete", "MW Job #"
         ])
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -211,6 +471,8 @@ class AwardedTab(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(False)
         self.table.clicked.connect(self._on_row_clicked)
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
         self.table.setSortingEnabled(False)
 
         h = self.table.horizontalHeader()
@@ -223,6 +485,8 @@ class AwardedTab(QWidget):
         h.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(7, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(9, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(10, QHeaderView.ResizeToContents)
 
         layout.addWidget(self.table, 1)
 
@@ -262,16 +526,34 @@ class AwardedTab(QWidget):
             self.pm_combo.setCurrentIndex(idx)
         self.pm_combo.blockSignals(False)
 
-        cur_yr = self.year_combo.currentText()
-        self.year_combo.blockSignals(True)
-        self.year_combo.clear()
-        self.year_combo.addItem("All Years")
-        for y in self.db.get_awarded_years():
-            self.year_combo.addItem(y)
-        idx = self.year_combo.findText(cur_yr)
+        cur_job_type = self.job_type_combo.currentText()
+        self.job_type_combo.blockSignals(True)
+        self.job_type_combo.clear()
+        self.job_type_combo.addItems([
+            "All Job Types",
+            "Solid Surface",
+            "Stone",
+            "Mixed",
+            "Unassigned",
+        ])
+        idx = self.job_type_combo.findText(cur_job_type)
         if idx >= 0:
-            self.year_combo.setCurrentIndex(idx)
-        self.year_combo.blockSignals(False)
+            self.job_type_combo.setCurrentIndex(idx)
+        self.job_type_combo.blockSignals(False)
+
+        cur_stage = self.stage_combo.currentText()
+        self.stage_combo.blockSignals(True)
+        self.stage_combo.clear()
+        self.stage_combo.addItems([
+            "All Stages",
+            "Not Started",
+            "In Progress",
+            "Complete",
+        ])
+        idx = self.stage_combo.findText(cur_stage)
+        if idx >= 0:
+            self.stage_combo.setCurrentIndex(idx)
+        self.stage_combo.blockSignals(False)
 
     def _refresh_stats(self):
         stats = self.db.get_awarded_stats()
@@ -288,27 +570,46 @@ class AwardedTab(QWidget):
         pm = self.pm_combo.currentText()
         if pm == "All Project Managers":
             pm = ""
-        year = self.year_combo.currentText()
-        if year == "All Years":
-            year = ""
         mw_sync_state = self.mw_sync_combo.currentText()
         if mw_sync_state == "All":
             mw_sync_state = ""
         mw_status = self.mw_status_combo.currentText()
         if mw_status == "All":
             mw_status = ""
-        return search, sp, pm, year, mw_sync_state, mw_status
+        job_type = self.job_type_combo.currentText()
+        if job_type == "All Job Types":
+            job_type = ""
+        stage = self.stage_combo.currentText()
+        if stage == "All Stages":
+            stage = ""
+        return search, sp, pm, mw_sync_state, mw_status, job_type, stage
 
     def _load_bids(self, scroll_to_bottom=True, select_bid_id=None):
-        search, sp, pm, year, mw_sync_state, mw_status = self._get_filters()
+        search, sp, pm, mw_sync_state, mw_status, job_type_filter, stage_filter = self._get_filters()
         bids = self.db.get_awarded_bids(
             search=search,
             salesperson=sp,
             project_manager=pm,
-            year=year,
             moraware_status=mw_status,
             moraware_sync_state=mw_sync_state,
         )
+        notebook_status_map = self.db.get_pm_notebook_status()
+        job_type_map = self.db.get_pm_job_type()
+
+        if job_type_filter:
+            bids = [b for b in bids if job_type_map.get(b["id"], "Unassigned") == job_type_filter]
+        if stage_filter:
+            if stage_filter == "Not Started":
+                bids = [b for b in bids if notebook_status_map.get(b["id"], "Pending") == "Pending"]
+            elif stage_filter == "In Progress":
+                bids = [
+                    b for b in bids
+                    if notebook_status_map.get(b["id"], "Pending") == "Active"
+                    and (b.get("invoice_status_calc") or "Pending") != "Invoiced"
+                ]
+            elif stage_filter == "Complete":
+                bids = [b for b in bids if (b.get("invoice_status_calc") or "Pending") == "Invoiced"]
+
         self._bids_cache = bids
 
         total_awarded = self.db.get_awarded_stats()["total_awarded"]
@@ -327,29 +628,40 @@ class AwardedTab(QWidget):
             num_item.setData(Qt.UserRole, bid_id)
             self.table.setItem(row, 0, num_item)
 
-            # Date Won (original_bid_date as proxy, or moraware_job_date)
-            won_date = b.get("moraware_job_date") or b.get("original_bid_date") or ""
+            won_date = b.get("won_date") or b.get("original_bid_date") or ""
             self.table.setItem(row, 1, QTableWidgetItem(self._fmt_date(won_date)))
 
             self.table.setItem(row, 2, QTableWidgetItem(b.get("bid_name") or ""))
             self.table.setItem(row, 3, QTableWidgetItem(b.get("won_customer_name") or ""))
             self.table.setItem(row, 4, QTableWidgetItem(b.get("salesperson") or ""))
             self.table.setItem(row, 5, QTableWidgetItem(b.get("project_manager") or ""))
+            self.table.setItem(row, 6, QTableWidgetItem(job_type_map.get(bid_id, "Unassigned")))
 
             total_val = b.get("bid_total") or 0
             total_item = QTableWidgetItem(f"${total_val:,.2f}")
             total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(row, 6, total_item)
+            self.table.setItem(row, 7, total_item)
 
             # Invoice status badge
             inv_status = b.get("invoice_status_calc", "Pending")
+            self.table.setItem(row, 8, QTableWidgetItem(inv_status))
             status_label = QLabel(inv_status)
             status_label.setAlignment(Qt.AlignCenter)
             status_label.setStyleSheet(self._invoice_badge_style(inv_status))
-            self.table.setCellWidget(row, 7, status_label)
+            self.table.setCellWidget(row, 8, status_label)
 
-            mw_date = b.get("moraware_job_date") or ""
-            self.table.setItem(row, 8, QTableWidgetItem(self._fmt_date(mw_date)))
+            est_complete = self._fmt_date(b.get("est_complete_date") or "")
+            self.table.setItem(row, 9, QTableWidgetItem(est_complete))
+
+            mw_job_num = (b.get("moraware_job_number") or "").strip()
+            self.table.setItem(row, 10, QTableWidgetItem(mw_job_num))
+
+            notebook_status = notebook_status_map.get(bid_id, "Pending")
+            if notebook_status == "Pending":
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    if item:
+                        item.setBackground(QColor("#FFA07A"))
 
             self.table.setRowHeight(row, 40)
 
@@ -436,10 +748,11 @@ class AwardedTab(QWidget):
         self.search_input.clear()
         self.sp_combo.setCurrentIndex(0)
         self.pm_combo.setCurrentIndex(0)
-        self.year_combo.setCurrentIndex(0)
         synced_idx = self.mw_sync_combo.findText("Synced")
         self.mw_sync_combo.setCurrentIndex(synced_idx if synced_idx >= 0 else 0)
         self.mw_status_combo.setCurrentIndex(0)
+        self.job_type_combo.setCurrentIndex(0)
+        self.stage_combo.setCurrentIndex(0)
         self._load_bids()
 
     # ------------------------------------------------------------------
@@ -454,6 +767,31 @@ class AwardedTab(QWidget):
         if bid_id:
             self._show_detail(bid_id)
 
+    def _show_context_menu(self, pos):
+        idx = self.table.indexAt(pos)
+        row = idx.row()
+        if row < 0:
+            return
+
+        bid_id = self._get_bid_id_at_row(row)
+        if not bid_id:
+            return
+
+        self.table.selectRow(row)
+        self._show_detail(bid_id)
+
+        menu = QMenu(self)
+        edit_job_action = menu.addAction("Edit Job")
+        open_moraware_action = menu.addAction("Open in Moraware")
+        move_back_action = menu.addAction("Move Back to Bidding")
+        chosen = menu.exec_(self.table.viewport().mapToGlobal(pos))
+        if chosen == edit_job_action:
+            self._edit_job(bid_id)
+        elif chosen == open_moraware_action:
+            self._open_in_moraware(bid_id)
+        elif chosen == move_back_action:
+            self._move_back_to_bidding(bid_id)
+
     def _show_detail(self, bid_id):
         self._selected_bid_id = bid_id
         self.detail_panel.load_bid(self.db, bid_id)
@@ -463,13 +801,92 @@ class AwardedTab(QWidget):
     # ------------------------------------------------------------------
     def _on_detail_action(self, action, bid_id):
         if action == "edit_won":
-            self._edit_won_details(bid_id)
+            self._edit_job(bid_id)
         elif action == "refresh_invoices":
             self._refresh_single_job(bid_id)
         elif action == "move_back":
             self._move_back_to_bidding(bid_id)
         elif action == "open_bid_folder":
             self._open_bid_folder(bid_id)
+
+    def _edit_job(self, bid_id):
+        dlg = PMEditJobDialog(self.db, bid_id, self)
+        if dlg.exec_() and dlg.selected_customer_id:
+            self.db.update_won_details(
+                bid_id, dlg.selected_customer_id,
+                salesperson=dlg.salesperson,
+                project_manager=dlg.project_manager,
+                won_notes=dlg.won_notes,
+                est_complete_date=dlg.est_complete_date,
+                est_complete_date_manual=dlg.est_complete_date_manual,
+                est_start_month=dlg.est_start_month,
+                won_date=dlg.won_date,
+            )
+            self._refresh_stats()
+            self._refresh_filter_combos()
+            self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
+
+    def _open_in_moraware(self, bid_id):
+        bid = self.db.get_bid_by_id(bid_id)
+        if not bid:
+            return
+
+        moraware_job_id = (bid.get("moraware_job_id") or "").strip()
+        if not moraware_job_id:
+            QMessageBox.information(
+                self,
+                "No Moraware Link",
+                "This job does not have a Moraware Job ID yet.",
+            )
+            return
+
+        configured_url = (get_config().get("moraware_url") or "").strip()
+        parsed = urlparse(configured_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+        if not origin:
+            QMessageBox.warning(
+                self,
+                "Moraware URL Missing",
+                "Set your Moraware URL in Settings before opening jobs in Moraware.",
+            )
+            return
+
+        webbrowser.open(f"{origin}/sys/job/{moraware_job_id}")
+
+    def _on_export_excel(self):
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            from utils.excel_export import export_pm_jobs
+
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Export PM Jobs", "pm_jobs_export.xlsx", "Excel Files (*.xlsx)"
+            )
+            if not path:
+                return
+
+            notebook_status_map = self.db.get_pm_notebook_status()
+            job_type_map = self.db.get_pm_job_type()
+            rows = []
+            for bid in self._bids_cache:
+                bid_id = bid["id"]
+                rows.append({
+                    "date_won": bid.get("won_date") or bid.get("original_bid_date") or "",
+                    "job_name": bid.get("bid_name") or "",
+                    "account": bid.get("won_customer_name") or "",
+                    "salesperson": bid.get("salesperson") or "",
+                    "project_manager": bid.get("project_manager") or "",
+                    "job_type": job_type_map.get(bid_id, "Unassigned"),
+                    "bid_total": bid.get("bid_total") or 0,
+                    "invoice_status": bid.get("invoice_status_calc", "Pending"),
+                    "est_complete_date": bid.get("est_complete_date") or "",
+                    "moraware_date": bid.get("moraware_created_date") or "",
+                    "notebook_status": notebook_status_map.get(bid_id, "Pending"),
+                })
+
+            export_pm_jobs(rows, path)
+            QMessageBox.information(self, "Export Complete", f"Exported {len(rows)} PM jobs to:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", str(e))
 
     def _open_bid_folder(self, bid_id):
         bid = self.db.get_bid_by_id(bid_id)
@@ -559,8 +976,8 @@ class AwardedTab(QWidget):
                 bid_id, dlg.selected_customer_id,
                 salesperson=dlg.salesperson,
                 project_manager=dlg.project_manager,
-                moraware_job_date=dlg.moraware_job_date,
                 won_notes=dlg.won_notes,
+                won_date=dlg.won_date,
             )
             self._refresh_stats()
             self._refresh_filter_combos()
@@ -684,7 +1101,9 @@ class AwardedDetailPanel(QWidget):
 
         info_fields = [
             ("Original Bid Date", "lbl_bid_date"),
-            ("Date Won / Moraware Date", "lbl_won_date"),
+            ("Date Won", "lbl_won_date"),
+            ("Moraware Date", "lbl_moraware_date"),
+            ("Moraware Job #", "lbl_mw_job_number"),
             ("Winning Customer", "lbl_customer"),
             ("Salesperson", "lbl_salesperson"),
             ("Project Manager", "lbl_pm"),
@@ -743,7 +1162,8 @@ class AwardedDetailPanel(QWidget):
         ih.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         ih.setSectionResizeMode(5, QHeaderView.Stretch)
         ih.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        ih.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        ih.setSectionResizeMode(7, QHeaderView.Interactive)
+        self.inv_table.setColumnWidth(7, 92)
         self.inv_table.setMinimumHeight(100)
         right.addWidget(self.inv_table)
 
@@ -799,7 +1219,9 @@ class AwardedDetailPanel(QWidget):
         self.lbl_name.setText(bid["bid_name"])
 
         self.lbl_bid_date.setText(self._fmt(bid.get("original_bid_date")))
-        self.lbl_won_date.setText(self._fmt(bid.get("moraware_job_date")) or self._fmt(bid.get("original_bid_date")))
+        self.lbl_won_date.setText(self._fmt(bid.get("won_date")))
+        self.lbl_moraware_date.setText(self._fmt(bid.get("moraware_created_date")))
+        self.lbl_mw_job_number.setText((bid.get("moraware_job_number") or "").strip() or "\u2014")
 
         if bid.get("won_customer_id"):
             customers = db.get_bid_customers(bid_id)
@@ -866,6 +1288,7 @@ class AwardedDetailPanel(QWidget):
                 status = inv.get("invoice_status") or "Pending"
                 status_label = QLabel(status)
                 status_label.setAlignment(Qt.AlignCenter)
+                status_label.setMinimumWidth(72)
                 if status == "Complete":
                     status_label.setStyleSheet(
                         "background-color: #1a3a1a; color: #4caf50; border-radius: 6px;"

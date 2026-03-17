@@ -22,7 +22,9 @@ from ui.bids_tab import BidsTab
 from ui.customers_tab import CustomersTab
 from ui.reports_tab import ReportsTab
 from ui.import_tab import ImportTab
-from ui.awarded_tab import AwardedTab
+from ui.pm_active_jobs_tab import PMActiveJobsTab
+from ui.pm_pending_award_tab import PMPendingAwardTab
+from ui.pm_history_tab import PMHistoryTab
 from ui.settings_tab import SettingsTab
 
 PORTAL_HUB = "hub"
@@ -162,6 +164,10 @@ class PMWindow(PortalWindowBase):
     def __init__(self, db: Database, open_hub_cb, logo_path: str = ""):
         super().__init__(db, "PM Portal", logo_path=logo_path)
         self._open_hub_cb = open_hub_cb
+        self.active_jobs_session_cache = {
+            "jobs": [],
+            "fetched_at": "",
+        }
         self._build_ui()
 
     def _build_ui(self):
@@ -172,12 +178,16 @@ class PMWindow(PortalWindowBase):
 
         back_btn = QPushButton("Back to Hub")
         back_btn.clicked.connect(self._open_hub_cb)
-        layout.addWidget(self._build_header("PM Portal", "Job Manager", right_widget=back_btn))
+        layout.addWidget(self._build_header("PM Portal", "Active Jobs, Pending Award, and History", right_widget=back_btn))
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
-        self.awarded_tab = AwardedTab(self.db, self)
-        self.tabs.addTab(self.awarded_tab, "Job Manager")
+        self.active_jobs_tab = PMActiveJobsTab(self.db, self.active_jobs_session_cache, self)
+        self.pending_award_tab = PMPendingAwardTab(self.db, self)
+        self.history_tab = PMHistoryTab(self.db, self)
+        self.tabs.addTab(self.active_jobs_tab, "Active Jobs")
+        self.tabs.addTab(self.pending_award_tab, "Pending Award")
+        self.tabs.addTab(self.history_tab, "Completed History")
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
 

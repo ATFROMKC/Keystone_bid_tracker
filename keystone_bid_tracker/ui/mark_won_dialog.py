@@ -21,6 +21,7 @@ class MarkWonDialog(QDialog):
         self.selected_customer_id = None
         self.salesperson = ""
         self.project_manager = ""
+        self.won_date = ""
         self.moraware_job_date = ""
         self.won_notes = ""
 
@@ -93,7 +94,7 @@ class MarkWonDialog(QDialog):
         self.pm_input.setCurrentText("")
         layout.addWidget(self.pm_input)
 
-        date_label = QLabel("Moraware Job Date:")
+        date_label = QLabel("Date Won:")
         date_label.setObjectName("secondaryLabel")
         layout.addWidget(date_label)
         self.date_edit = QDateEdit()
@@ -113,8 +114,8 @@ class MarkWonDialog(QDialog):
         if self.edit_mode:
             self.salesperson_input.setCurrentText(self.bid.get("salesperson") or "")
             self.pm_input.setCurrentText(self.bid.get("project_manager") or "")
-            if self.bid.get("moraware_job_date"):
-                d = QDate.fromString(self.bid["moraware_job_date"], "yyyy-MM-dd")
+            if self.bid.get("won_date"):
+                d = QDate.fromString(self.bid["won_date"], "yyyy-MM-dd")
                 if d.isValid():
                     self.date_edit.setDate(d)
             self.notes_input.setPlainText(self.bid.get("won_notes") or "")
@@ -160,6 +161,8 @@ class MarkWonDialog(QDialog):
         self.selected_customer_id = self.combo.currentData()
         self.salesperson = self.salesperson_input.currentText().strip()
         self.project_manager = self.pm_input.currentText().strip()
-        self.moraware_job_date = self.date_edit.date().toString("yyyy-MM-dd")
+        self.won_date = self.date_edit.date().toString("yyyy-MM-dd")
+        # Backward-compatible alias for older call sites.
+        self.moraware_job_date = self.won_date
         self.won_notes = self.notes_input.toPlainText().strip()
         self.accept()

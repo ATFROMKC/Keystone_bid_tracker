@@ -40,4 +40,5 @@ When there is conflicting guidance, use this order:
 
 ## End-of-Session Requirement
 
-Before closing a coding session, remind the user to append a concise entry to `SESSION_NOTES.md`.
+Before closing a coding session, ask exactly: "should I append a concise entry to session_notes.md?"
+If the user says yes, append the entry. If the user says no, do nothing.

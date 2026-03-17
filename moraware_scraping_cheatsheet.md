@@ -25,7 +25,7 @@
 |---|---|---|
 | Creation Date | Inline `label: value` text scan | Label normalizes to `created date` or `creation date` |
 | Salesperson | Inline `label: value` text scan | Label normalizes to `salesperson` or `sales person` |
-| Project Manager | Inline `label: value` text scan | Label normalizes to `project manager` |
+| Project Manager | Inline `label: value` text scan | Keystone instances may label this as `Keystone PM`; parser should normalize both |
 | Status | Inline `label: value` text scan | |
 
 **Inline scan pattern:**
@@ -164,10 +164,10 @@ for td in form_soup.select("table.formRowTable td"):
 
 ## XML API (`/api.aspx`)
 
-**Status: BROKEN for this instance**  
-**Error:** `The 'request' element is not declared`  
-**Affected calls:** `jobFormsGet`, possibly others  
-**Do not use** — fall back to web scraping for all data.
+**Status: Partially used in current app**  
+- API v5 session + command flows are used for selected operations (example: job status reads).
+- Job Ticket A and activity details still rely on scraping/AJAX endpoints where needed.
+- Treat integration as mixed-mode: API where reliable, scraping/AJAX where required.
 
 ---
 
@@ -203,5 +203,5 @@ Handles edge cases like:
 - **Forms are always collapsed on initial page load** — always use the AJAX POST to get form content, never assume `data-delayedLoad="0"`
 - **`cuid=29` is instance-specific** — if connecting to a different Moraware account this will be different
 - **TP Code column position in activities table is dynamic** — always detect by header text, never hardcode column index
-- **XML API is broken** — don't attempt `jobFormsGet` or similar, it will always return a schema validation error
+- **Use mixed integration paths** — API v5 works for some calls; Job Ticket A/activities continue to use scraping/AJAX in current implementation
 - **Invoice activity TP Code overrides Job Ticket A TP Code** — invoice is source of truth when present

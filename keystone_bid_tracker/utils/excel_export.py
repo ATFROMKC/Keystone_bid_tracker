@@ -99,3 +99,67 @@ def export_report_data(report_data: dict, filepath: str):
     ws3.append(["Overall Win Rate", f"{win_data.get('overall_rate', 0)}%"])
 
     wb.save(filepath)
+
+
+def export_pm_jobs(rows: list, filepath: str):
+    """Export PM Job Manager rows to xlsx."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "PM Jobs"
+
+    headers = [
+        "DATE WON",
+        "JOB NAME",
+        "ACCOUNT",
+        "SALESPERSON",
+        "PM",
+        "JOB TYPE",
+        "BID TOTAL $",
+        "INVOICE STATUS",
+        "EST COMPLETE",
+        "MORAWARE DATE",
+        "NOTEBOOK STATUS",
+    ]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center")
+
+    for row_idx, row in enumerate(rows, 2):
+        def _fmt_date(val):
+            if not val:
+                return ""
+            try:
+                return datetime.strptime(val, "%Y-%m-%d").strftime("%m/%d/%Y")
+            except (ValueError, TypeError):
+                return val
+
+        ws.cell(row=row_idx, column=1, value=_fmt_date(row.get("date_won"))).font = CELL_FONT
+        ws.cell(row=row_idx, column=2, value=row.get("job_name", "")).font = CELL_FONT
+        ws.cell(row=row_idx, column=3, value=row.get("account", "")).font = CELL_FONT
+        ws.cell(row=row_idx, column=4, value=row.get("salesperson", "")).font = CELL_FONT
+        ws.cell(row=row_idx, column=5, value=row.get("project_manager", "")).font = CELL_FONT
+        ws.cell(row=row_idx, column=6, value=row.get("job_type", "")).font = CELL_FONT
+
+        total_cell = ws.cell(row=row_idx, column=7, value=row.get("bid_total", 0))
+        total_cell.number_format = "$#,##0.00"
+        total_cell.font = CELL_FONT
+
+        ws.cell(row=row_idx, column=8, value=row.get("invoice_status", "")).font = CELL_FONT
+        ws.cell(row=row_idx, column=9, value=_fmt_date(row.get("est_complete_date"))).font = CELL_FONT
+        ws.cell(row=row_idx, column=10, value=_fmt_date(row.get("moraware_date"))).font = CELL_FONT
+        ws.cell(row=row_idx, column=11, value=row.get("notebook_status", "")).font = CELL_FONT
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_idx, column=col).border = BORDER
+
+    for col in range(1, len(headers) + 1):
+        max_len = len(str(headers[col - 1]))
+        for row in range(2, len(rows) + 2):
+            val = ws.cell(row=row, column=col).value
+            if val:
+                max_len = max(max_len, len(str(val)))
+        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = min(max_len + 4, 50)
+
+    wb.save(filepath)
