@@ -515,3 +515,25 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Follow-ups:
   - Confirm no additional generated artifacts should be archived before publishing a review branch.
   - Create/push a dedicated review branch and share the branch URL with read-only access.
+
+---
+
+### 2026-03-06 - Share-ready branch + packaged exe handoff prep
+
+- Objective: Publish a reviewer branch snapshot, complete safe root reorganization moves (`docs/` + `reference/`), and generate a zipped Windows test build for non-technical one-click testing.
+- Files changed: `docs/`, `reference/`, `tools/release/`, `_archive/`, `packages/Keystone_Bid_Tracker_Windows_Test_Build.zip`, `SESSION_NOTES.md`
+- Commit hash: `a727dfa` (root move-only reorg on `review/share-for-readonly`; branch pushed)
+- Follow-ups:
+  - Remind testers to fully extract the zip and run from a writable folder so `config.json` can persist local settings.
+  - Include tester note that PM `Pending Award` and `Completed History` remain unfinished/in-progress.
+
+---
+
+### 2026-03-05 - Add reviewer-facing README and setup guide
+
+- Objective: Create share-friendly documentation so reviewers/testers can understand project status, local config requirements, and startup/setup steps.
+- Files changed: `README.md`, `docs/SETUP.md`, `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - Commit and push docs updates so they appear on GitHub.
+  - Verify rendered markdown on GitHub (`README.md` and `docs/SETUP.md`) after push.
