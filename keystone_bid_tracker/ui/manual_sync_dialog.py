@@ -10,12 +10,13 @@ import re
 from bs4 import BeautifulSoup
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QLineEdit, QListWidget, QListWidgetItem,
+    QGroupBox, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 from config import get_config
-from ui.mark_won_dialog import MarkWonDialog
+from ui.link_review_dialog import LinkReviewDialog
+from ui.split_moraware_allocation_dialog import SplitMorawareAllocationDialog
 
 logger = logging.getLogger("manual_sync")
 
@@ -500,6 +501,7 @@ class ManualSyncDialog(QDialog):
         right_layout.addWidget(self._partial_label)
 
         self.job_list = QListWidget()
+        self.job_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.job_list.currentItemChanged.connect(self._on_job_selected)
         right_layout.addWidget(self.job_list, 1)
 
@@ -536,12 +538,12 @@ class ManualSyncDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
 
-        self.link_btn = QPushButton("Link Only")
+        self.link_btn = QPushButton("Link Selected Job(s)")
         self.link_btn.setEnabled(False)
         self.link_btn.clicked.connect(self._on_link_only)
         btn_row.addWidget(self.link_btn)
 
-        self.link_won_btn = QPushButton("Link && Confirm Won")
+        self.link_won_btn = QPushButton("Link + Edit Won Details")
         self.link_won_btn.setObjectName("successButton")
         self.link_won_btn.setEnabled(False)
         self.link_won_btn.clicked.connect(self._on_link_and_won)
@@ -664,62 +666,123 @@ class ManualSyncDialog(QDialog):
         self._detail_labels["Keystone PM"].setText(
             job.get("project_manager", "") or "—")
         self._detail_box.show()
-        self.link_btn.setEnabled(True)
-        self.link_won_btn.setEnabled(True)
+        selected_count = len(self.job_list.selectedItems())
+        can_link = selected_count > 0 or bool(self._selected_job)
+        self.link_btn.setEnabled(can_link)
+        self.link_won_btn.setEnabled(can_link)
 
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
     def _on_unlink(self):
-        self.db.clear_moraware_job_id(self.bid["id"])
+        self.db.unsync_bid_from_moraware(self.bid["id"])
+        self.accept()
+
+    def _selected_jobs(self):
+        items = self.job_list.selectedItems()
+        if items:
+            out = []
+            seen = set()
+            for item in items:
+                payload = item.data(Qt.UserRole) or {}
+                jid = str(payload.get("id") or "").strip()
+                if not jid or jid in seen:
+                    continue
+                out.append(payload)
+                seen.add(jid)
+            return out
+        return [self._selected_job] if self._selected_job else []
+
+    def _link_selected_jobs(self, force_edit_won: bool = False):
+        jobs = self._selected_jobs()
+        if not jobs:
+            return
+        bid_id = self.bid["id"]
+        existing_links = self.db.get_bid_moraware_links(bid_id)
+        has_primary = any(int((x or {}).get("is_primary") or 0) == 1 for x in existing_links)
+        linked_ids = {str((x or {}).get("moraware_job_id") or "").strip() for x in existing_links}
+        linked_count = 0
+        for idx, job in enumerate(jobs):
+            job_id = str(job.get("id") or "").strip()
+            if not job_id or job_id in linked_ids:
+                continue
+            review_bid = next(
+                (b for b in (self.db.get_linkable_bids(search="") or []) if int(b.get("id") or 0) == int(bid_id)),
+                None,
+            ) or (self.db.get_bid_by_id(int(bid_id)) or {})
+            review = LinkReviewDialog(
+                self.db,
+                review_bid,
+                job,
+                moraware_client=self._client,
+                parent=self,
+            )
+            if not review.exec_() or not review.selected_customer_id:
+                return
+            chosen_customer_id = int(review.selected_customer_id)
+
+            bid_state = self.db.get_bid_by_id(int(bid_id)) or {}
+            is_won = str((bid_state.get("status") or "")).strip().upper() == "WON"
+            sp = (job.get("salesperson") or "").strip()
+            pm = (job.get("project_manager") or "").strip()
+            if is_won:
+                if force_edit_won or int(bid_state.get("won_customer_id") or 0) != chosen_customer_id:
+                    self.db.update_won_details(
+                        int(bid_id),
+                        chosen_customer_id,
+                        salesperson=(bid_state.get("salesperson") or sp).strip(),
+                        project_manager=(bid_state.get("project_manager") or pm).strip(),
+                        moraware_job_date=bid_state.get("moraware_job_date"),
+                        won_notes=(bid_state.get("won_notes") or "").strip(),
+                        est_complete_date=bid_state.get("est_complete_date"),
+                        est_complete_date_manual=bid_state.get("est_complete_date_manual"),
+                        est_start_month=bid_state.get("est_start_month"),
+                        won_date=bid_state.get("won_date"),
+                    )
+            else:
+                self.db.ensure_bid_won_for_link(
+                    int(bid_id),
+                    won_customer_id=chosen_customer_id,
+                    salesperson=sp,
+                    project_manager=pm,
+                )
+            make_primary = (not has_primary and idx == 0)
+            self.db.add_bid_moraware_link(
+                bid_id,
+                job_id,
+                job.get("job_number", ""),
+                make_primary=make_primary,
+                job_name=(job.get("name") or "").strip(),
+            )
+            if make_primary:
+                self.db.set_moraware_job_number(bid_id, job.get("job_number", ""))
+                has_primary = True
+            created = job.get("created_date", "")
+            if created:
+                self.db.set_moraware_created_date(bid_id, created)
+            linked_ids.add(job_id)
+            linked_count += 1
+        if linked_count == 0:
+            QMessageBox.information(self, "No New Links", "Selected job(s) are already linked to this bid.")
+            return
+        total_links = len(self.db.get_bid_moraware_links(bid_id))
+        if total_links > 1:
+            reply = QMessageBox.question(
+                self,
+                "Split Linked Jobs",
+                "Multiple Moraware jobs are linked to this quote.\n\nSplit now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                SplitMorawareAllocationDialog(self.db, bid_id, self).exec_()
         self.accept()
 
     def _on_link_only(self):
-        if not self._selected_job:
-            return
-        self.db.set_moraware_job_id(self.bid["id"], self._selected_job["id"])
-        self.accept()
+        self._link_selected_jobs(force_edit_won=False)
 
     def _on_link_and_won(self):
-        if not self._selected_job:
-            return
-        job = self._selected_job
-        bid_id = self.bid["id"]
-
-        self.db.set_moraware_job_id(bid_id, job["id"])
-
-        won_dlg = MarkWonDialog(self.db, bid_id, parent=self)
-
-        sp = job.get("salesperson", "")
-        pm = job.get("project_manager", "")
-        if sp:
-            idx = won_dlg.salesperson_input.findText(sp, Qt.MatchFixedString)
-            if idx >= 0:
-                won_dlg.salesperson_input.setCurrentIndex(idx)
-            else:
-                won_dlg.salesperson_input.addItem(sp)
-                won_dlg.salesperson_input.setCurrentText(sp)
-        if pm:
-            idx = won_dlg.pm_input.findText(pm, Qt.MatchFixedString)
-            if idx >= 0:
-                won_dlg.pm_input.setCurrentIndex(idx)
-            else:
-                won_dlg.pm_input.addItem(pm)
-                won_dlg.pm_input.setCurrentText(pm)
-
-        if won_dlg.exec_() and won_dlg.selected_customer_id:
-            salesperson = won_dlg.salesperson or sp
-            project_manager = won_dlg.project_manager or pm
-            moraware_job_date = won_dlg.moraware_job_date or ""
-            self.db.mark_bid_won(
-                bid_id, won_dlg.selected_customer_id,
-                salesperson=salesperson,
-                project_manager=project_manager,
-                moraware_job_date=moraware_job_date,
-                won_notes=won_dlg.won_notes,
-            )
-
-        self.accept()
+        self._link_selected_jobs(force_edit_won=True)
 
     # ------------------------------------------------------------------
     # Helpers

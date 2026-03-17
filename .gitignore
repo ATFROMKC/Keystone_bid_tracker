@@ -13,3 +13,16 @@ keystone_bid_tracker/Keystone_bid_tracker/
 _local/*
 !_local/.gitkeep
 !_local/README.md
+
+# Local archives and generated build outputs
+_archive/
+build/
+dist/
+
+# Packaging artifacts
+*.spec
+*.exe
+*.pkg
+*.pyz
+*.toc
+base_library.zip

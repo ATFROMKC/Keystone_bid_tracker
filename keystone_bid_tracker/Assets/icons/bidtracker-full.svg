@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B3A5C"/>
+      <stop offset="100%" stop-color="#0F2340"/>
+    </linearGradient>
+    <linearGradient id="b1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#0288D1"/>
+    </linearGradient>
+    <linearGradient id="b2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#81D4FA"/>
+      <stop offset="100%" stop-color="#29B6F6"/>
+    </linearGradient>
+    <linearGradient id="b3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4FC3F7" stop-opacity=".45"/>
+      <stop offset="100%" stop-color="#0277BD" stop-opacity=".45"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <text x="512" y="170" font-family="'DM Sans', 'Helvetica Neue', Arial, sans-serif" font-size="94" font-weight="300" letter-spacing="12" fill="#E1F5FE" text-anchor="middle" opacity=".70">BidTracker</text>
+  <line x1="168" y1="208" x2="856" y2="208" stroke="#4FC3F7" stroke-width="2" opacity=".20"/>
+  <rect x="200" y="640" width="155" height="205" rx="18" fill="url(#b3)"/>
+  <rect x="434" y="410" width="155" height="435" rx="18" fill="url(#b1)" filter="url(#glow)"/>
+  <rect x="668" y="520" width="155" height="325" rx="18" fill="url(#b2)"/>
+  <polyline points="278,603 511,367 745,477" fill="none" stroke="#E1F5FE" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" opacity=".92" filter="url(#glow)"/>
+  <polygon points="745,477 700,427 792,429" fill="#E1F5FE" opacity=".92"/>
+  <line x1="168" y1="845" x2="856" y2="845" stroke="#4FC3F7" stroke-width="10" stroke-linecap="round" opacity=".35"/>
+</svg>

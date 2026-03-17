@@ -52,8 +52,11 @@ class AddBidDialog(QDialog):
         self.date_input.setDisplayFormat("MM/dd/yyyy")
         form.addRow("Bid Date *", self.date_input)
 
-        self.estimator_input = QLineEdit()
-        self.estimator_input.setPlaceholderText("Estimator name...")
+        self.estimator_input = QComboBox()
+        self.estimator_input.setEditable(True)
+        self.estimator_input.setInsertPolicy(QComboBox.NoInsert)
+        self.estimator_input.lineEdit().setPlaceholderText("Estimator name...")
+        self._load_estimators()
         form.addRow("Estimator *", self.estimator_input)
 
         self.total_input = QLineEdit()
@@ -101,7 +104,7 @@ class AddBidDialog(QDialog):
         layout.addWidget(self.cust_search)
 
         self.cust_list = QListWidget()
-        self.cust_list.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.cust_list.setSelectionMode(QAbstractItemView.NoSelection)
         self.cust_list.setMinimumHeight(120)
         self.cust_list.setMaximumHeight(180)
         layout.addWidget(self.cust_list)
@@ -139,9 +142,11 @@ class AddBidDialog(QDialog):
         for c in customers:
             item = QListWidgetItem(c["name"])
             item.setData(Qt.UserRole, c["id"])
+            item.setFlags((item.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsSelectable)
+            item.setCheckState(Qt.Checked if select_ids and c["id"] in select_ids else Qt.Unchecked)
             self.cust_list.addItem(item)
-            if select_ids and c["id"] in select_ids:
-                item.setSelected(True)
+
+        self._filter_customers(self.cust_search.text().strip())
 
     def _filter_customers(self, text):
         for i in range(self.cust_list.count()):
@@ -157,7 +162,7 @@ class AddBidDialog(QDialog):
                 for i in range(self.cust_list.count()):
                     item = self.cust_list.item(i)
                     if item.data(Qt.UserRole) == existing["id"]:
-                        item.setSelected(True)
+                        item.setCheckState(Qt.Checked)
                         break
                 return
             cid = self.db.add_customer(name.strip())
@@ -167,9 +172,17 @@ class AddBidDialog(QDialog):
 
     def _get_selected_customer_ids(self):
         ids = set()
-        for item in self.cust_list.selectedItems():
-            ids.add(item.data(Qt.UserRole))
+        for i in range(self.cust_list.count()):
+            item = self.cust_list.item(i)
+            if item.checkState() == Qt.Checked:
+                ids.add(item.data(Qt.UserRole))
         return ids
+
+    def _load_estimators(self):
+        self.estimator_input.clear()
+        for estimator in self.db.get_estimators():
+            if estimator:
+                self.estimator_input.addItem(estimator)
 
     def _populate(self, data):
         self.name_input.setText(data.get("bid_name", ""))
@@ -177,7 +190,12 @@ class AddBidDialog(QDialog):
             d = QDate.fromString(data["original_bid_date"], "yyyy-MM-dd")
             if d.isValid():
                 self.date_input.setDate(d)
-        self.estimator_input.setText(data.get("estimator", ""))
+        estimator_name = data.get("estimator", "")
+        idx = self.estimator_input.findText(estimator_name)
+        if idx >= 0:
+            self.estimator_input.setCurrentIndex(idx)
+        else:
+            self.estimator_input.setEditText(estimator_name)
 
         rev = self.db.get_latest_revision(data["id"])
         if rev:
@@ -198,7 +216,7 @@ class AddBidDialog(QDialog):
 
     def _on_save(self):
         bid_name = self.name_input.text().strip()
-        estimator = self.estimator_input.text().strip()
+        estimator = self.estimator_input.currentText().strip()
         total_text = self.total_input.text().strip().replace(",", "").replace("$", "")
         solid_text = self.solid_sf_input.text().strip().replace(",", "")
         stone_text = self.stone_sf_input.text().strip().replace(",", "")

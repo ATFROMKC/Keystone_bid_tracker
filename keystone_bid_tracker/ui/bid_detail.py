@@ -14,6 +14,7 @@ from styles.theme import get_status_style
 
 class BidDetailPanel(QWidget):
     action_triggered = pyqtSignal(str, int)  # action_name, bid_id
+    close_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -74,14 +75,17 @@ class BidDetailPanel(QWidget):
         right.setSpacing(8)
 
         rev_header = QHBoxLayout()
+        rev_header.setContentsMargins(0, 0, 0, 0)
         rev_title = QLabel("Revision History")
         rev_title.setObjectName("subheadingLabel")
         rev_header.addWidget(rev_title)
         rev_header.addStretch()
 
-        self.add_rev_btn = QPushButton("+ Add Revision")
-        self.add_rev_btn.clicked.connect(lambda: self._emit("add_revision"))
-        rev_header.addWidget(self.add_rev_btn)
+        self.hide_btn = QPushButton("✕")
+        self.hide_btn.setFixedSize(30, 28)
+        self.hide_btn.setToolTip("Hide details")
+        self.hide_btn.clicked.connect(self.close_requested.emit)
+        rev_header.addWidget(self.hide_btn)
         right.addLayout(rev_header)
 
         self.rev_table = QTableWidget()
@@ -130,6 +134,10 @@ class BidDetailPanel(QWidget):
         self.btn_unlink_mw.setToolTip("Remove Moraware link from this bid")
         self.btn_unlink_mw.clicked.connect(lambda: self._emit("unlink_mw"))
         btn_bar.addWidget(self.btn_unlink_mw)
+
+        self.btn_open_folder = QPushButton("Open Bid Folder")
+        self.btn_open_folder.clicked.connect(lambda: self._emit("open_bid_folder"))
+        btn_bar.addWidget(self.btn_open_folder)
 
         self.btn_edit = QPushButton("Edit Bid")
         self.btn_edit.clicked.connect(lambda: self._emit("edit"))

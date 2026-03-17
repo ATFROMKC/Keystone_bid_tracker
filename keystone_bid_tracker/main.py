@@ -8,6 +8,7 @@ import logging
 
 from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 # Ensure package imports work when running from this directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,33 @@ from ui.main_window import (
 )
 
 APP_VERSION = "1.0.0"
+LOGGER = logging.getLogger(__name__)
+
+
+def _base_dir() -> str:
+    """Return the runtime base directory (supports frozen builds)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _asset_path(*parts: str) -> str:
+    return os.path.join(_base_dir(), "Assets", *parts)
+
+
+def _apply_app_icon(app: QApplication) -> None:
+    """Apply the app icon when asset files are available."""
+    icon_path = _asset_path("icons", "bidtracker.ico")
+    if not os.path.exists(icon_path):
+        LOGGER.warning("App icon not found at: %s", icon_path)
+        return
+
+    icon = QIcon(icon_path)
+    if icon.isNull():
+        LOGGER.warning("App icon failed to load from: %s", icon_path)
+        return
+
+    app.setWindowIcon(icon)
 
 
 def prompt_for_db_path(app: QApplication) -> str:
@@ -80,25 +108,48 @@ class PortalController:
         self.estimator_window.hide()
         self.pm_window.hide()
 
-    def show_hub(self):
+    def _current_window(self):
+        for window in (self.hub_window, self.estimator_window, self.pm_window):
+            if window.isVisible():
+                return window
+        return None
+
+    def _switch_to(self, target_window, portal_key=None):
+        if portal_key:
+            set_last_portal(portal_key)
+
+        source_window = self._current_window()
+        source_is_maximized = bool(source_window and source_window.isMaximized())
+        source_geometry = None
+        if source_window and not source_is_maximized:
+            source_geometry = source_window.geometry()
+
         self._hide_all()
-        self.hub_window.show()
-        self.hub_window.raise_()
-        self.hub_window.activateWindow()
+
+        if source_window is None:
+            # Startup path: preserve target's own previous state when possible.
+            if target_window.isMaximized():
+                target_window.showMaximized()
+            else:
+                target_window.show()
+        elif source_is_maximized:
+            target_window.showMaximized()
+        else:
+            if source_geometry is not None:
+                target_window.setGeometry(source_geometry)
+            target_window.showNormal()
+
+        target_window.raise_()
+        target_window.activateWindow()
+
+    def show_hub(self):
+        self._switch_to(self.hub_window)
 
     def show_estimator(self):
-        set_last_portal(PORTAL_ESTIMATOR)
-        self._hide_all()
-        self.estimator_window.show()
-        self.estimator_window.raise_()
-        self.estimator_window.activateWindow()
+        self._switch_to(self.estimator_window, PORTAL_ESTIMATOR)
 
     def show_pm(self):
-        set_last_portal(PORTAL_PM)
-        self._hide_all()
-        self.pm_window.show()
-        self.pm_window.raise_()
-        self.pm_window.activateWindow()
+        self._switch_to(self.pm_window, PORTAL_PM)
 
     def show_startup_window(self):
         last_portal = get_last_portal(default=PORTAL_HUB)
@@ -115,6 +166,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Keystone Bid Tracker")
     app.setApplicationVersion(APP_VERSION)
+    _apply_app_icon(app)
 
     apply_theme(app)
 

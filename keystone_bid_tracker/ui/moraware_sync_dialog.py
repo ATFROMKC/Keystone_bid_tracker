@@ -21,6 +21,7 @@ from PyQt5.QtGui import QColor
 from thefuzz import fuzz
 
 from config import get_config
+from ui.link_review_dialog import LinkReviewDialog
 from ui.mark_won_dialog import MarkWonDialog
 
 logger = logging.getLogger("moraware_sync")
@@ -384,52 +385,64 @@ class ManualSyncDialog(QDialog):
     def _on_link_only(self):
         if not self._selected_job:
             return
-        self.db.set_moraware_job_id(self.bid["id"], self._selected_job["id"])
+        bid_id = self.bid["id"]
+        review = LinkReviewDialog(self.db, self.bid, self._selected_job, moraware_client=self.moraware_client, parent=self)
+        if not review.exec_() or not review.selected_customer_id:
+            return
+        bid = self.db.get_bid_by_id(bid_id) or {}
+        is_won = str((bid.get("status") or "")).strip().upper() == "WON"
+        sp = (self._selected_job.get("salesperson", "") or "").strip()
+        pm = (self._selected_job.get("project_manager", "") or "").strip()
+        if is_won:
+            if int(bid.get("won_customer_id") or 0) != int(review.selected_customer_id):
+                self.db.update_won_details(
+                    bid_id,
+                    int(review.selected_customer_id),
+                    salesperson=(bid.get("salesperson") or sp).strip(),
+                    project_manager=(bid.get("project_manager") or pm).strip(),
+                    moraware_job_date=bid.get("moraware_job_date"),
+                    won_notes=(bid.get("won_notes") or "").strip(),
+                    est_complete_date=bid.get("est_complete_date"),
+                    est_complete_date_manual=bid.get("est_complete_date_manual"),
+                    est_start_month=bid.get("est_start_month"),
+                    won_date=bid.get("won_date"),
+                )
+        else:
+            self.db.ensure_bid_won_for_link(
+                bid_id,
+                won_customer_id=int(review.selected_customer_id),
+                salesperson=sp,
+                project_manager=pm,
+            )
+        self.db.add_bid_moraware_link(
+            bid_id,
+            self._selected_job["id"],
+            self._selected_job.get("job_number", ""),
+            make_primary=True,
+            job_name=(self._selected_job.get("name") or "").strip(),
+        )
+        self.db.set_moraware_job_number(bid_id, self._selected_job.get("job_number", ""))
+        created = (self._job_details or {}).get("created_date", "")
+        if created:
+            self.db.set_moraware_created_date(bid_id, created)
+        if len(self.db.get_bid_moraware_links(bid_id)) > 1:
+            split_now = QMessageBox.question(
+                self,
+                "Split Linked Jobs",
+                "Multiple Moraware jobs are linked to this quote.\n\nSplit now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if split_now == QMessageBox.Yes:
+                from ui.split_moraware_allocation_dialog import SplitMorawareAllocationDialog
+                SplitMorawareAllocationDialog(self.db, bid_id, self).exec_()
         self.result_action = self.LINK_ONLY
         self.accept()
 
     def _on_link_and_won(self):
         if not self._selected_job:
             return
-        job = self._selected_job
-        bid_id = self.bid["id"]
-        job_id = job["id"]
-
-        self.db.set_moraware_job_id(bid_id, job_id)
-
-        won_dlg = MarkWonDialog(self.db, bid_id, parent=self)
-
-        sp = job.get("salesperson", "")
-        pm = job.get("project_manager", "")
-        if sp:
-            idx = won_dlg.salesperson_input.findText(sp, Qt.MatchFixedString)
-            if idx >= 0:
-                won_dlg.salesperson_input.setCurrentIndex(idx)
-            else:
-                won_dlg.salesperson_input.addItem(sp)
-                won_dlg.salesperson_input.setCurrentText(sp)
-        if pm:
-            idx = won_dlg.pm_input.findText(pm, Qt.MatchFixedString)
-            if idx >= 0:
-                won_dlg.pm_input.setCurrentIndex(idx)
-            else:
-                won_dlg.pm_input.addItem(pm)
-                won_dlg.pm_input.setCurrentText(pm)
-
-        if won_dlg.exec_() and won_dlg.selected_customer_id:
-            salesperson = won_dlg.salesperson or sp
-            project_manager = won_dlg.project_manager or pm
-            moraware_job_date = won_dlg.moraware_job_date or ""
-            self.db.mark_bid_won(
-                bid_id, won_dlg.selected_customer_id,
-                salesperson=salesperson,
-                project_manager=project_manager,
-                moraware_job_date=moraware_job_date,
-                won_notes=won_dlg.won_notes,
-            )
-
-        self.result_action = self.LINK_AND_WON
-        self.accept()
+        self._on_link_only()
 
     @staticmethod
     def _add_field(layout, label, value):
@@ -1313,18 +1326,35 @@ class MorewareSyncDialog(QDialog):
             project_manager = won_dlg.project_manager or (
                 job_details.get("project_manager", "") if job_details else ""
             )
-            moraware_job_date = won_dlg.moraware_job_date or (
-                job_details.get("created_date", "") if job_details else ""
-            )
             self.db.mark_bid_won(
                 bid_id, won_dlg.selected_customer_id,
                 salesperson=salesperson,
                 project_manager=project_manager,
-                moraware_job_date=moraware_job_date,
                 won_notes=won_dlg.won_notes,
+                won_date=won_dlg.won_date,
             )
-            self.db.set_moraware_job_id(bid_id, job_id)
-
+            self.db.add_bid_moraware_link(
+                bid_id,
+                job_id,
+                job.get("job_number", ""),
+                make_primary=True,
+                job_name=(job.get("name") or "").strip(),
+            )
+            self.db.set_moraware_job_number(bid_id, job.get("job_number", ""))
+            created = job_details.get("created_date", "") if job_details else ""
+            if created:
+                self.db.set_moraware_created_date(bid_id, created)
+            if len(self.db.get_bid_moraware_links(bid_id)) > 1:
+                split_now = QMessageBox.question(
+                    self,
+                    "Split Linked Jobs",
+                    "Multiple Moraware jobs are linked to this quote.\n\nSplit now?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes,
+                )
+                if split_now == QMessageBox.Yes:
+                    from ui.split_moraware_allocation_dialog import SplitMorawareAllocationDialog
+                    SplitMorawareAllocationDialog(self.db, bid_id, self).exec_()
             self._dismissed.add(match_idx)
             self._populate_table()
             self.status_label.setText(

@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QColor
 
+from config import get_config
 from styles.theme import get_status_style, COLORS
 from ui.bid_detail import BidDetailPanel
 from ui.add_bid_dialog import AddBidDialog
@@ -77,17 +78,24 @@ class BidsTab(QWidget):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(12)
         self.stat_total = StatCard("TOTAL BIDS")
-        self.stat_active = StatCard("ACTIVE")
-        self.stat_won = StatCard("WON")
         self.stat_value = StatCard("TOTAL VALUE")
-        for card in (self.stat_total, self.stat_active, self.stat_won, self.stat_value):
+        self.stat_won = StatCard("WON")
+        self.stat_won_value = StatCard("TOTAL WON VALUE")
+        self.stat_win_pct = StatCard("WIN %")
+        self._stat_cards = [
+            self.stat_total,
+            self.stat_value,
+            self.stat_won,
+            self.stat_won_value,
+            self.stat_win_pct,
+        ]
+        for card in self._stat_cards:
             stats_row.addWidget(card)
         left_col.addLayout(stats_row)
-        top_section.addLayout(left_col)
+        top_section.addLayout(left_col, 7)
+        self._stats_row_layout = stats_row
 
         # Center: logo + subtitle
-        top_section.addStretch()
-
         logo_col = QVBoxLayout()
         logo_col.setSpacing(2)
         logo_col.addStretch()
@@ -99,9 +107,10 @@ class BidsTab(QWidget):
         )
         self._logo_pixmap = QPixmap(logo_path)
         if not self._logo_pixmap.isNull():
-            scaled = self._logo_pixmap.scaledToHeight(80, Qt.SmoothTransformation)
+            scaled = self._logo_pixmap.scaledToHeight(92, Qt.SmoothTransformation)
             self._logo_label.setPixmap(scaled)
         self._logo_label.setAlignment(Qt.AlignCenter)
+        self._logo_label.setMinimumWidth(200)
 
         glow = QGraphicsDropShadowEffect()
         glow.setBlurRadius(20)
@@ -118,9 +127,7 @@ class BidsTab(QWidget):
         )
         logo_col.addWidget(subtitle)
         logo_col.addStretch()
-        top_section.addLayout(logo_col)
-
-        top_section.addStretch()
+        top_section.addLayout(logo_col, 3)
 
         # Right column: buttons (top-aligned)
         right_col = QVBoxLayout()
@@ -142,7 +149,7 @@ class BidsTab(QWidget):
 
         right_col.addLayout(btn_row)
         right_col.addStretch()
-        top_section.addLayout(right_col)
+        top_section.addLayout(right_col, 2)
 
         layout.addLayout(top_section)
 
@@ -221,13 +228,40 @@ class BidsTab(QWidget):
         # --- Detail panel ---
         self.detail_panel = BidDetailPanel(self)
         self.detail_panel.action_triggered.connect(self._on_detail_action)
+        self.detail_panel.close_requested.connect(self._on_hide_detail)
         layout.addWidget(self.detail_panel)
+        self._apply_responsive_header(self.width())
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._apply_responsive_header(event.size().width())
+
+    def _apply_responsive_header(self, width):
         if self._logo_pixmap.isNull():
             return
-        target_h = max(40, min(90, self.stat_total.height()))
+
+        if width < 1450:
+            card_min_width = 130
+            stats_spacing = 8
+            logo_height = 62
+        elif width < 1750:
+            card_min_width = 145
+            stats_spacing = 10
+            logo_height = 82
+        elif width < 2100:
+            card_min_width = 160
+            stats_spacing = 12
+            logo_height = 102
+        else:
+            card_min_width = 170
+            stats_spacing = 12
+            logo_height = 118
+
+        self._stats_row_layout.setSpacing(stats_spacing)
+        for card in self._stat_cards:
+            card.setMinimumWidth(card_min_width)
+
+        target_h = max(50, logo_height)
         current = self._logo_label.pixmap()
         if current and abs(current.height() - target_h) < 4:
             return
@@ -239,7 +273,6 @@ class BidsTab(QWidget):
     # ------------------------------------------------------------------
     def refresh(self):
         self._refresh_filter_combos()
-        self._refresh_stats()
         self._load_bids()
 
     def _refresh_filter_combos(self):
@@ -267,12 +300,21 @@ class BidsTab(QWidget):
             self.year_combo.setCurrentIndex(idx)
         self.year_combo.blockSignals(False)
 
-    def _refresh_stats(self):
-        stats = self.db.get_stats()
-        self.stat_total.set_value(stats["total"])
-        self.stat_active.set_value(stats["active"])
-        self.stat_won.set_value(stats["won"])
-        self.stat_value.set_value(f"${stats['total_value']:,.0f}")
+    def _refresh_stats(self, bids):
+        total = len(bids)
+        won = sum(1 for b in bids if (b.get("status") or "").upper() == "WON")
+        total_value = sum(float(b.get("bid_total") or 0) for b in bids)
+        total_won_value = sum(
+            float(b.get("bid_total") or 0)
+            for b in bids
+            if (b.get("status") or "").upper() == "WON"
+        )
+        win_pct = (won / total * 100.0) if total > 0 else 0.0
+        self.stat_total.set_value(total)
+        self.stat_value.set_value(f"${total_value:,.0f}")
+        self.stat_won.set_value(won)
+        self.stat_won_value.set_value(f"${total_won_value:,.0f}")
+        self.stat_win_pct.set_value(f"{win_pct:.1f}%")
 
     def _get_filters(self):
         search = self.search_input.text().strip()
@@ -290,9 +332,9 @@ class BidsTab(QWidget):
     def _load_bids(self, scroll_to_bottom=True, select_bid_id=None):
         search, est, status, year = self._get_filters()
         bids = self.db.get_bids(search=search, estimator=est, status=status, year=year)
+        self._refresh_stats(bids)
 
-        total_count = self.db.get_stats()["total"]
-        self.showing_label.setText(f"Showing {len(bids)} of {total_count} bids")
+        self.showing_label.setText(f"Showing {len(bids)} bids")
 
         self.table.setRowCount(len(bids))
 
@@ -409,6 +451,9 @@ class BidsTab(QWidget):
         self._selected_bid_id = bid_id
         self.detail_panel.load_bid(self.db, bid_id)
 
+    def _on_hide_detail(self):
+        self.detail_panel.hide()
+
     # ------------------------------------------------------------------
     # Context menu
     # ------------------------------------------------------------------
@@ -429,8 +474,9 @@ class BidsTab(QWidget):
         won_action = menu.addAction("Mark Won")
         menu.addSeparator()
         export_action = menu.addAction("Export to Excel")
+        open_folder_action = menu.addAction("Open Bid Folder")
         menu.addSeparator()
-        sync_action = menu.addAction("\U0001f517 Sync with Moraware Job")
+        sync_action = menu.addAction("\U0001f517 Sync with Moraware Job(s)")
         unsync_action = menu.addAction("🔗 Unsync from Moraware")
         unsync_action.setEnabled(bool(bid.get("moraware_job_id")))
         menu.addSeparator()
@@ -447,16 +493,19 @@ class BidsTab(QWidget):
             self._mark_won(bid_id)
         elif action == export_action:
             self._export_single(bid_id)
+        elif action == open_folder_action:
+            self._open_bid_folder(bid_id)
         elif action == sync_action:
             self._manual_sync(bid_id)
         elif action == unsync_action:
             confirm = QMessageBox.question(
                 self, "Unsync from Moraware",
-                f"Remove Moraware link from '{bid['bid_name']}'?",
+                f"Unsync '{bid['bid_name']}' from Moraware?\n\n"
+                "This removes Moraware links and synced invoice rows, but keeps bid status unchanged.",
                 QMessageBox.Yes | QMessageBox.No,
             )
             if confirm == QMessageBox.Yes:
-                self.db.clear_moraware_job_id(bid["id"])
+                self.db.unsync_bid_from_moraware(bid["id"])
                 self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
         elif action == delete_action:
             self._delete_bid(bid_id)
@@ -490,16 +539,100 @@ class BidsTab(QWidget):
                 return
             confirm = QMessageBox.question(
                 self, "Unsync from Moraware",
-                f"Remove Moraware link from '{bid['bid_name']}'?",
+                f"Unsync '{bid['bid_name']}' from Moraware?\n\n"
+                "This removes Moraware links and synced invoice rows, but keeps bid status unchanged.",
                 QMessageBox.Yes | QMessageBox.No,
             )
             if confirm == QMessageBox.Yes:
-                self.db.clear_moraware_job_id(bid_id)
+                self.db.unsync_bid_from_moraware(bid_id)
                 self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
+        elif action == "open_bid_folder":
+            self._open_bid_folder(bid_id)
 
     # ------------------------------------------------------------------
     # CRUD operations
     # ------------------------------------------------------------------
+    def _open_bid_folder(self, bid_id):
+        bid = self.db.get_bid_by_id(bid_id)
+        if not bid:
+            return
+
+        original_bid_date = bid.get("original_bid_date")
+        if not original_bid_date:
+            QMessageBox.warning(self, "Missing Bid Date", "This bid has no original bid date.")
+            return
+
+        try:
+            bid_date = datetime.strptime(original_bid_date, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            QMessageBox.warning(
+                self,
+                "Invalid Bid Date",
+                f"Could not parse original bid date: {original_bid_date}",
+            )
+            return
+
+        cfg = get_config()
+        dropbox_bids_path = (cfg.get("dropbox_bids_path") or "").strip()
+        if not dropbox_bids_path:
+            QMessageBox.warning(
+                self,
+                "Dropbox Path Not Configured",
+                "Set the Dropbox bids root path in Settings first.",
+            )
+            return
+
+        year_path = os.path.join(dropbox_bids_path, str(bid_date.year))
+        if not os.path.isdir(year_path):
+            QMessageBox.warning(
+                self,
+                "Folder Not Found",
+                f"Year folder not found:\n{year_path}",
+            )
+            return
+
+        month_folder_map = {
+            1: "1- January",
+            2: "2 -February",
+            3: "3 - March",
+            4: "4 - April",
+            5: "5 - May",
+            6: "6 - June",
+            7: "7 - July",
+            8: "8 - August",
+            9: "9 - September",
+            10: "10 - October",
+            11: "11 - November",
+            12: "12- December",
+        }
+        exact_month_folder = month_folder_map[bid_date.month]
+        month_path = os.path.join(year_path, exact_month_folder)
+
+        if not os.path.isdir(month_path):
+            month_name = bid_date.strftime("%B").lower()
+            fallback_match = None
+            for entry in os.listdir(year_path):
+                candidate_path = os.path.join(year_path, entry)
+                if not os.path.isdir(candidate_path):
+                    continue
+                normalized = entry.replace("-", " ").replace("_", " ").lower()
+                if normalized.startswith(str(bid_date.month)) and month_name in normalized:
+                    fallback_match = candidate_path
+                    break
+            if fallback_match:
+                month_path = fallback_match
+
+        if not os.path.isdir(month_path):
+            QMessageBox.warning(
+                self,
+                "Folder Not Found",
+                f"Could not find month folder for {bid_date.strftime('%B %Y')}.\n"
+                f"Expected:\n{month_path}",
+            )
+            return
+
+        os.startfile(month_path)
+
     def _on_add_bid(self):
         dlg = AddBidDialog(self.db, self)
         if dlg.exec_() and dlg.result_data:
@@ -509,7 +642,6 @@ class BidsTab(QWidget):
                 d["notes"], d["customer_ids"], d["bid_total"],
                 d["solid_surf_sf"], d["stone_sf"],
             )
-            self._refresh_stats()
             self._refresh_filter_combos()
             self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
 
@@ -534,7 +666,6 @@ class BidsTab(QWidget):
             new_status = d.get("status", bid["status"])
             if new_status != bid["status"]:
                 self.db.mark_bid_status(bid_id, new_status)
-            self._refresh_stats()
             self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
 
     def _add_revision(self, bid_id):
@@ -545,7 +676,6 @@ class BidsTab(QWidget):
                 bid_id, d["revision_date"], d["bid_total"],
                 d["solid_surf_sf"], d["stone_sf"], d["reason"],
             )
-            self._refresh_stats()
             self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
 
     def _mark_won(self, bid_id):
@@ -555,10 +685,9 @@ class BidsTab(QWidget):
                 bid_id, dlg.selected_customer_id,
                 salesperson=dlg.salesperson,
                 project_manager=dlg.project_manager,
-                moraware_job_date=dlg.moraware_job_date,
                 won_notes=dlg.won_notes,
+                won_date=dlg.won_date,
             )
-            self._refresh_stats()
             self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
 
     def _delete_bid(self, bid_id):
@@ -577,7 +706,6 @@ class BidsTab(QWidget):
             self.db.delete_bid(bid_id)
             self.detail_panel.hide()
             self._selected_bid_id = None
-            self._refresh_stats()
             self._load_bids()
 
     def _on_open_sync_dialog(self):

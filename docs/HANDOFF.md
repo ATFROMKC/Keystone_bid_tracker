@@ -8,6 +8,8 @@
 > - `AGENTS.md` (stable operating contract)
 >
 > Use this file only as background history.
+>
+> **Important:** file-level "changed/not changed" and behavior notes below are from an older session snapshot and can contradict current code. Do not use this file for current-state implementation decisions.
 
 # HANDOFF.md — Moraware Integration Fixes (Archived)
 

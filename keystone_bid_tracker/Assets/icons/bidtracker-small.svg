@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B3A5C"/>
+      <stop offset="100%" stop-color="#0F2340"/>
+    </linearGradient>
+    <linearGradient id="b1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#0288D1"/>
+    </linearGradient>
+    <linearGradient id="b2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#81D4FA"/>
+      <stop offset="100%" stop-color="#29B6F6"/>
+    </linearGradient>
+    <linearGradient id="b3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4FC3F7" stop-opacity=".60"/>
+      <stop offset="100%" stop-color="#0277BD" stop-opacity=".60"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <rect x="184" y="560" width="185" height="300" rx="24" fill="url(#b3)"/>
+  <rect x="420" y="300" width="185" height="560" rx="24" fill="url(#b1)"/>
+  <rect x="656" y="430" width="185" height="430" rx="24" fill="url(#b2)"/>
+  <polyline points="275,505 512,300 747,402" fill="none" stroke="#E1F5FE" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>
+  <polygon points="747,402 688,347 803,347" fill="#E1F5FE" opacity=".95"/>
+  <line x1="160" y1="860" x2="864" y2="860" stroke="#4FC3F7" stroke-width="22" stroke-linecap="round" opacity=".45"/>
+</svg>

@@ -5,6 +5,20 @@ A desktop application for Keystone Solid Surfaces to track commercial countertop
 Built in **PyQt5**, compiled to .exe, data stored in a **SQLite database on Dropbox** 
 so two users (Austin and his PM) can share access.
 
+## Current-State Note (Important)
+
+This document started as the original build spec and now contains historical sections.
+For implementation decisions, prefer:
+
+1. code in `keystone_bid_tracker/`
+2. `PROJECT_CONTEXT.md`
+3. `SESSION_NOTES.md`
+
+Current architecture in code uses a 3-portal model:
+- Hub portal
+- Estimator portal
+- PM portal (`Active Jobs`, `Pending Award`, `Completed History`)
+
 ---
 
 ## Visual Design Target
@@ -47,7 +61,7 @@ CREATE TABLE bids (
     bid_name TEXT NOT NULL,
     estimator TEXT NOT NULL,
     original_bid_date TEXT NOT NULL,
-    status TEXT DEFAULT 'BIDDING',  -- BIDDING, WON, LOST, DEAD
+    status TEXT DEFAULT 'PENDING',  -- operationally PENDING / WON (legacy LOST/DEAD remapped to PENDING)
     won_customer_id INTEGER REFERENCES customers(id),
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
@@ -88,12 +102,12 @@ CREATE TABLE bid_revisions (
 - Title: "Keystone Bid Tracker"
 - Dark title bar / dark theme throughout
 
-### Tab Structure (Top Navigation)
-1. **Bids** (main view, default tab)
-2. **Customers**
-3. **Reports**
-4. **Import**
-5. **Settings**
+### Portal + Tab Structure (Current)
+- **Hub Portal:** Accounts, Settings
+- **Estimator Portal:** Bids, Import, Reports
+- **PM Portal:** Active Jobs, Pending Award, Completed History
+
+Legacy single-window “Top Navigation” sections below are historical design context.
 
 ---
 
@@ -102,14 +116,14 @@ CREATE TABLE bid_revisions (
 ### Summary Stats Bar (top of tab)
 Four stat cards in a horizontal row:
 - **Total Bids** — count of all bids
-- **Active** — count where status = BIDDING
+- **Active** — count where status = PENDING
 - **Won** — count where status = WON
 - **Total Value** — sum of latest revision bid_total across all bids
 
 ### Filter/Search Bar (below stats)
 - Search box: searches bid_name and customer names (case insensitive)
 - Estimator dropdown filter
-- Status dropdown filter (All / Bidding / Won / Lost / Dead)
+- Status dropdown filter (current app focuses on All / PENDING / BIDDING / WON depending on view)
 - Year filter dropdown
 - "Clear Filters" button
 - Shows "Showing X of Y bids" count
@@ -121,10 +135,9 @@ Columns:
 - **Default sort:** by created_at ascending (oldest first), scrolled to BOTTOM so newest bid is visible
 - **Alternating row colors** for readability
 - **Color-coded status badges:**
-  - BIDDING = blue
+  - PENDING/BIDDING = blue
   - WON = green
-  - LOST = red
-  - DEAD = gray
+  - (legacy LOST/DEAD values are migrated to PENDING)
 - **Click a row** to expand the bid detail panel below (or inline expand)
 - Double-click to open full edit dialog
 - Right-click context menu: Edit, Add Revision, Mark Won, Mark Lost, Mark Dead, Delete
@@ -317,7 +330,9 @@ On first launch with no config, prompt user to set database path.
 
 ---
 
-## Files to Create
+## Files to Create (Historical Baseline)
+
+This file tree reflects the original build baseline and is not the full current-state file map.
 
 ```
 keystone_bid_tracker/
