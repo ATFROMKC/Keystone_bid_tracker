@@ -39,7 +39,7 @@ python keystone_bid_tracker/main.py
 
 ### Daily launch (no console window)
 
-From the repo root, double-click **`launch_keystone_bid_tracker.cmd`**, or run it from Explorer. It uses **`pythonw`** from `.venv` when present so a terminal window does not stay open.
+From the repo root, double-click **`launch_keystone_bid_tracker.cmd`**, or run it from Explorer. It starts **`pythonw`** from `.venv` when present; the launcher uses **`start`** so the brief Command Prompt window closes as soon as the app is running (no console left open).
 
 ### Desktop shortcut (optional)
 

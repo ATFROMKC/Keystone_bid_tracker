@@ -1,20 +1,21 @@
 @echo off
-REM Run Keystone Bid Tracker (no console): prefers pythonw / pyw only.
+REM Run Keystone Bid Tracker (no console): start pythonw detached so this cmd window closes.
 cd /d "%~dp0"
 set "MAIN=%~dp0keystone_bid_tracker\main.py"
+set "PYW=%~dp0.venv\Scripts\pythonw.exe"
 
-if exist ".venv\Scripts\pythonw.exe" (
-  ".venv\Scripts\pythonw.exe" "%MAIN%"
+if exist "%PYW%" (
+  start "" "%PYW%" "%MAIN%"
   exit /b 0
 )
 where pythonw >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  pythonw "%MAIN%"
+  start "" pythonw "%MAIN%"
   exit /b 0
 )
 where pyw >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  pyw -3 "%MAIN%"
+  start "" pyw -3 "%MAIN%"
   exit /b 0
 )
 
