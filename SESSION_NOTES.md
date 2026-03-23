@@ -602,3 +602,12 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Commit hash: `f41a467`
 - Follow-ups:
   - Other PC: `git pull` on `main`, create `.venv` once, `pip install -r requirements.txt`, re-run `scripts\create_desktop_shortcut.ps1` if you want a fresh Desktop shortcut.
+
+---
+
+### 2026-03-23 - Launcher: `start` so cmd window closes
+
+- Objective: Double-clicking `launch_keystone_bid_tracker.cmd` no longer leaves a Command Prompt open for the whole session; `start ""` detaches `pythonw` / `pyw`.
+- Files changed: `launch_keystone_bid_tracker.cmd`, `README.md`, `SESSION_NOTES.md`
+- Commit hash: `62659a7`
+- Follow-ups: none
