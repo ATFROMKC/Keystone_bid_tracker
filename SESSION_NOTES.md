@@ -613,3 +613,12 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Follow-ups:
   - Native/Qt crashes (not Python exceptions) may still exit silently; use `python keystone_bid_tracker/main.py` in a console to debug.
 
+---
+
+### 2026-03-24 - Git pull check on dev machine
+
+- Objective: Run `git pull` on this machine before continuing work; remote `main` was already fully synced (**Already up to date**).
+- Files changed: `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - None.
