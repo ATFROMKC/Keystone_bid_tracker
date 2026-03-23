@@ -599,6 +599,6 @@ Use concise entries. Keep only high-signal notes that help the next session star
 
 - Objective: Console-free launch via `launch_keystone_bid_tracker.cmd`, Desktop shortcut script with `bidtracker.ico`, Windows taskbar/pin behavior via `SetCurrentProcessExplicitAppUserModelID`, document multi-PC workflow; ignore `.venv/` in Git.
 - Files changed: `.gitignore`, `README.md`, `keystone_bid_tracker/main.py`, `launch_keystone_bid_tracker.cmd`, `scripts/create_desktop_shortcut.ps1`, `SESSION_NOTES.md`
-- Commit hash: `n/a` (run `git config user.email` / `user.name` on this machine, then `git commit` → `git push` if not yet pushed)
+- Commit hash: `f41a467`
 - Follow-ups:
   - Other PC: `git pull` on `main`, create `.venv` once, `pip install -r requirements.txt`, re-run `scripts\create_desktop_shortcut.ps1` if you want a fresh Desktop shortcut.
