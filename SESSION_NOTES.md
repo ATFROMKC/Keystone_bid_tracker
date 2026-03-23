@@ -570,3 +570,13 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Follow-ups:
   - On the second PC, clone or fetch the same repo and check out `review/share-for-readonly` (or merge to `main` when ready).
   - Never commit `keystone_bid_tracker/config.json` (already gitignored).
+
+---
+
+### 2026-03-17 - Cursor rule: git session sync + SESSION_NOTES
+
+- Objective: Add an always-on Cursor rule so each session starts with a **`git pull`** reminder and session end runs **status → stage → commit (user or AI message) → push → append `SESSION_NOTES.md`**; align `AGENTS.md`, `context-first.mdc`, and `NEXT_CHAT_CHECKLIST.md`. Note: true “on editor close” automation is not possible—user must wrap up with the agent or ask to sync.
+- Files changed: `.cursor/rules/git-session-sync.mdc` (new), `AGENTS.md`, `.cursor/rules/context-first.mdc`, `NEXT_CHAT_CHECKLIST.md`, `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - At end of future sessions, say “wrap up” / “sync” / “push” so the agent runs the full close sequence.
