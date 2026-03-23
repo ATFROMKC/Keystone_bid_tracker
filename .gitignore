@@ -19,6 +19,9 @@ _archive/
 build/
 dist/
 
+# Local packaged zips (large; share via drive/release, not git)
+packages/*.zip
+
 # Packaging artifacts
 *.spec
 *.exe

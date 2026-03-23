@@ -537,3 +537,36 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Follow-ups:
   - Commit and push docs updates so they appear on GitHub.
   - Verify rendered markdown on GitHub (`README.md` and `docs/SETUP.md`) after push.
+
+---
+
+### 2026-03-05 - Docs push confirmation for reviewer branch
+
+- Objective: Finalize and publish reviewer documentation updates to remote branch for GitHub sharing.
+- Files changed: `README.md`, `docs/SETUP.md`, `SESSION_NOTES.md`
+- Commit hash: `c474128` (`review/share-for-readonly`)
+- Follow-ups:
+  - Open PR and verify markdown rendering on GitHub before sharing with external reviewers.
+
+---
+
+### 2026-03-17 - Archive legacy Keystone Bid Tracker folder
+
+- Objective: Record decision to move the old `Keystone Bid Tracker` (Node/web prototype) tree out of the active workspace into an `Archive Projects` folder; current app remains `Keystone Bid Tracker 2` (PyQt) only.
+- Files changed: `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - If anything still pointed at the old path, update shortcuts or scripts; normal launch is `keystone_bid_tracker/main.py` or packaged exe under Bid Tracker 2.
+
+---
+
+### 2026-03-17 - Two-machine Cursor workflow (commit + push)
+
+- Objective: Keep `review/share-for-readonly` in sync between computers via GitHub (`origin` = `https://github.com/ATFROMKC/Keystone_bid_tracker.git`).
+- Workflow (end of session): `git status` → `git add` → `git commit -m "..."` → `git push` on the active branch.
+- Workflow (start on other machine): `git pull` before editing; resolve conflicts if any, then continue.
+- Files changed: `SESSION_NOTES.md`, `.gitignore` (ignore `packages/*.zip` so test build zips stay local and out of the repo)
+- Commit hash: `n/a`
+- Follow-ups:
+  - On the second PC, clone or fetch the same repo and check out `review/share-for-readonly` (or merge to `main` when ready).
+  - Never commit `keystone_bid_tracker/config.json` (already gitignored).
