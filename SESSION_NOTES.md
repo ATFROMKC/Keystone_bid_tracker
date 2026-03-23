@@ -580,3 +580,15 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Commit hash: `n/a`
 - Follow-ups:
   - At end of future sessions, say “wrap up” / “sync” / “push” so the agent runs the full close sequence.
+
+---
+
+### 2026-03-23 - Merge `review/share-for-readonly` into `main`
+
+- Objective: Bring Cursor rules, git-session-sync docs, and related session notes onto **`main`** so day-to-day work and the other PC can use **`main`** only.
+- Actions: `git checkout main` → `git pull origin main` → `git merge origin/review/share-for-readonly` → `git push origin main`.
+- Files changed: merge brought in `.cursor/rules/*.mdc`, `AGENTS.md`, `NEXT_CHAT_CHECKLIST.md`, `.gitignore`, `SESSION_NOTES.md` updates from the review branch.
+- Commit hash: `526c80a` (merge commit on `main`)
+- Follow-ups:
+  - On the new PC: `git checkout main` → `git pull` to get the same state.
+  - Continue using **`main`** for daily work; keep or delete `review/share-for-readonly` as preferred.
