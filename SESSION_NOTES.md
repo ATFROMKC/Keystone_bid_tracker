@@ -639,5 +639,5 @@ Use concise entries. Keep only high-signal notes that help the next session star
 
 - Objective: Add a short multi-PC handoff file (`OTHER_PC_HANDOFF.md`) overwritten when pushing meaningful work; agents read it after `SESSION_NOTES.md`. Wire into `AGENTS.md`, `PROJECT_CONTEXT.md`, `NEXT_CHAT_CHECKLIST.md`, `context-first.mdc`, `git-session-sync.mdc`.
 - Files changed: `OTHER_PC_HANDOFF.md`, `AGENTS.md`, `PROJECT_CONTEXT.md`, `NEXT_CHAT_CHECKLIST.md`, `SESSION_NOTES.md`, `.cursor/rules/context-first.mdc`, `.cursor/rules/git-session-sync.mdc`
-- Commit hash: `11a39f9`
+- Commit hash: `2420994`
 - Follow-ups: On other PC, `git pull` then read `OTHER_PC_HANDOFF.md` after each meaningful push from this machine.
