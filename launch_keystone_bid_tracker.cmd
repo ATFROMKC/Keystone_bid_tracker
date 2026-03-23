@@ -1,21 +1,23 @@
 @echo off
 REM Run Keystone Bid Tracker (no console): start pythonw detached so this cmd window closes.
+REM Uses scripts\launch_app.py: repo root cwd + %%TEMP%%\KeystoneBidTracker_last_error.txt on Python errors.
+setlocal
 cd /d "%~dp0"
-set "MAIN=%~dp0keystone_bid_tracker\main.py"
+set "APP_SCRIPT=%~dp0scripts\launch_app.py"
 set "PYW=%~dp0.venv\Scripts\pythonw.exe"
 
 if exist "%PYW%" (
-  start "" "%PYW%" "%MAIN%"
+  start "" "%PYW%" "%APP_SCRIPT%"
   exit /b 0
 )
 where pythonw >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  start "" pythonw "%MAIN%"
+  start "" pythonw "%APP_SCRIPT%"
   exit /b 0
 )
 where pyw >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  start "" pyw -3 "%MAIN%"
+  start "" pyw -3 "%APP_SCRIPT%"
   exit /b 0
 )
 

@@ -39,7 +39,7 @@ python keystone_bid_tracker/main.py
 
 ### Daily launch (no console window)
 
-From the repo root, double-click **`launch_keystone_bid_tracker.cmd`**, or run it from Explorer. It starts **`pythonw`** from `.venv` when present; the launcher uses **`start`** so the brief Command Prompt window closes as soon as the app is running (no console left open).
+From the repo root, double-click **`launch_keystone_bid_tracker.cmd`**, or run it from Explorer. It starts **`pythonw`** from `.venv` when present and uses **`start`** so the Command Prompt window closes as soon as the app is running. The launcher runs **`scripts/launch_app.py`**, which sets the repo as the working directory and, if Python fails, writes **`%TEMP%\KeystoneBidTracker_last_error.txt`** (open that file in Notepad if the app does not appear).
 
 ### Desktop shortcut (optional)
 

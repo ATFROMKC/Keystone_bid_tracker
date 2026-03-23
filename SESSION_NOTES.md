@@ -605,9 +605,11 @@ Use concise entries. Keep only high-signal notes that help the next session star
 
 ---
 
-### 2026-03-23 - Launcher: `start` so cmd window closes
+### 2026-03-23 - Launcher: `start` + `launch_app.py` (cwd + error log)
 
-- Objective: Double-clicking `launch_keystone_bid_tracker.cmd` no longer leaves a Command Prompt open for the whole session; `start ""` detaches `pythonw` / `pyw`.
-- Files changed: `launch_keystone_bid_tracker.cmd`, `README.md`, `SESSION_NOTES.md`
-- Commit hash: `62659a7`
-- Follow-ups: none
+- Objective: Double-clicking `launch_keystone_bid_tracker.cmd` does not leave a Command Prompt open (`start ""` detaches `pythonw` / `pyw`). Entry **`scripts/launch_app.py`** sets repo root as cwd and writes Python tracebacks to **`%TEMP%\KeystoneBidTracker_last_error.txt`** (`pythonw` hides stderr).
+- Files changed: `launch_keystone_bid_tracker.cmd`, `scripts/launch_app.py`, `README.md`, `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - Native/Qt crashes (not Python exceptions) may still exit silently; use `python keystone_bid_tracker/main.py` in a console to debug.
+
