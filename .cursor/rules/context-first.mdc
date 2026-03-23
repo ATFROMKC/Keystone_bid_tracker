@@ -1,0 +1,25 @@
+---
+description: Load and validate project context docs first
+alwaysApply: true
+---
+
+# Context First Rule
+
+At the start of each new chat in this project:
+
+1. Read `AGENTS.md`, `PROJECT_CONTEXT.md`, `SESSION_NOTES.md`, and `NEXT_CHAT_CHECKLIST.md` if they exist.
+2. Also read `.cursor/rules/context-first.mdc` and `.cursor/rules/git-session-sync.mdc`.
+3. Before coding, provide:
+   - a short project-state summary,
+   - any stale or conflicting context found,
+   - a suggested session-note entry format for the current session.
+4. Per `git-session-sync.mdc`: **remind the user to `git pull`** (or offer to run it) before substantive work.
+
+## Conflict Handling
+
+- If docs conflict, trust current code first, then `PROJECT_CONTEXT.md`, then `SESSION_NOTES.md`.
+- Treat `HANDOFF.md` as legacy/history unless explicitly confirmed current.
+
+## Session Close Reminder
+
+Follow **`.cursor/rules/git-session-sync.mdc`**: when wrapping up, offer **status → stage → commit → push → `SESSION_NOTES.md`**. For a notes-only close without git, you may still ask whether to append to `SESSION_NOTES.md`.
