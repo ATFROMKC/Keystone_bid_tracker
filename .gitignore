@@ -1,7 +1,10 @@
 __pycache__/
 *.py[cod]
 
-.cursor/
+# Cursor: ignore local workspace data; keep shared rules tracked
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 
 # Local app/runtime configuration
 keystone_bid_tracker/config.json
@@ -18,6 +21,9 @@ _local/*
 _archive/
 build/
 dist/
+
+# Local packaged zips (large; share via drive/release, not git)
+packages/*.zip
 
 # Packaging artifacts
 *.spec

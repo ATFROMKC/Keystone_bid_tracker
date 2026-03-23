@@ -1,0 +1,53 @@
+---
+description: Git pull at session start; commit, push, and SESSION_NOTES at session end
+alwaysApply: true
+---
+
+# Git session sync (two-machine / multi-PC workflow)
+
+**Limitation:** Cursor rules cannot run shell commands when the editor closes. This workflow runs when **you ask the assistant** to end the session, wrap up, sync, or push—or when you confirm the assistant’s end-of-session prompt.
+
+## Start of each new chat/session
+
+1. **Remind** the user to run **`git pull`** on their current branch so the machine matches GitHub before coding.
+2. Offer to run `git pull` in the terminal (requires `network` and user approval if prompted).
+3. Optionally show **`git status`** so local changes are visible at session start.
+
+## End of each coding session
+
+When the user indicates they are **done for now**, **wrapping up**, **syncing**, **pushing**, or answers **yes** to “ready to commit and push?”, run this **session-close** sequence:
+
+### 1. Inspect
+
+- Run **`git status`** (and `git diff` / `git diff --stat` if helpful).
+- Summarize what changed in plain language.
+
+### 2. Stage
+
+- Stage intentional changes with **`git add`** (specific paths or `git add -A` when appropriate).
+- **Do not** stage ignored secrets (e.g. `keystone_bid_tracker/config.json`) or obvious junk.
+- If new files are ambiguous (large binaries, local-only artifacts), **ask** before staging.
+
+### 3. Commit message
+
+- **Ask** the user for their preferred commit message **or** offer 1–2 short **imperative** options derived from the diff (e.g. `Fix PM Active Jobs link refresh`, `Docs: clarify Moraware sync steps`).
+- Use the user’s message if they provide one; otherwise use the best descriptive option **after** they confirm or say “you choose”.
+
+### 4. Commit and push
+
+- If there is nothing to commit, **skip** commit/push; still update **`SESSION_NOTES.md`** if real work happened (including discussion-only outcomes worth recording—ask briefly).
+- Otherwise: **`git commit -m "..."`**, then **`git push`** to **`origin`** for the **current branch** (`git push -u origin <branch>` if upstream is missing).
+- If push fails (behind remote), explain, then **`git pull`** (merge or rebase per user preference), resolve conflicts if needed, and **retry push**.
+
+### 5. SESSION_NOTES.md (required for session close)
+
+Append a **new dated entry** at the end of `SESSION_NOTES.md` using the project’s entry template:
+
+- **Title line:** `### YYYY-MM-DD - Short session title`
+- **Bullets:** Objective / what was done, **Files changed** (paths or areas), **Commit hash:** short SHA from the commit just made (or `n/a` if no commit), **Follow-ups** (if any).
+
+This replaces a separate yes/no-only prompt for session notes when the user completes the **full session-close** flow—unless they explicitly say **not** to update `SESSION_NOTES.md`.
+
+## Priority vs other rules
+
+For **session-start pull** and **session-end commit/push + SESSION_NOTES**, this rule **overrides** generic “do not commit unless asked” guidance in `AGENTS.md` **only** when the user is following this workflow.

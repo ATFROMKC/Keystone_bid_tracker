@@ -537,3 +537,46 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Follow-ups:
   - Commit and push docs updates so they appear on GitHub.
   - Verify rendered markdown on GitHub (`README.md` and `docs/SETUP.md`) after push.
+
+---
+
+### 2026-03-05 - Docs push confirmation for reviewer branch
+
+- Objective: Finalize and publish reviewer documentation updates to remote branch for GitHub sharing.
+- Files changed: `README.md`, `docs/SETUP.md`, `SESSION_NOTES.md`
+- Commit hash: `c474128` (`review/share-for-readonly`)
+- Follow-ups:
+  - Open PR and verify markdown rendering on GitHub before sharing with external reviewers.
+
+---
+
+### 2026-03-17 - Archive legacy Keystone Bid Tracker folder
+
+- Objective: Record decision to move the old `Keystone Bid Tracker` (Node/web prototype) tree out of the active workspace into an `Archive Projects` folder; current app remains `Keystone Bid Tracker 2` (PyQt) only.
+- Files changed: `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - If anything still pointed at the old path, update shortcuts or scripts; normal launch is `keystone_bid_tracker/main.py` or packaged exe under Bid Tracker 2.
+
+---
+
+### 2026-03-17 - Two-machine Cursor workflow (commit + push)
+
+- Objective: Keep `review/share-for-readonly` in sync between computers via GitHub (`origin` = `https://github.com/ATFROMKC/Keystone_bid_tracker.git`).
+- Workflow (end of session): `git status` → `git add` → `git commit -m "..."` → `git push` on the active branch.
+- Workflow (start on other machine): `git pull` before editing; resolve conflicts if any, then continue.
+- Files changed: `SESSION_NOTES.md`, `.gitignore` (ignore `packages/*.zip` so test build zips stay local and out of the repo)
+- Commit hash: `n/a`
+- Follow-ups:
+  - On the second PC, clone or fetch the same repo and check out `review/share-for-readonly` (or merge to `main` when ready).
+  - Never commit `keystone_bid_tracker/config.json` (already gitignored).
+
+---
+
+### 2026-03-17 - Cursor rule: git session sync + SESSION_NOTES
+
+- Objective: Add an always-on Cursor rule so each session starts with a **`git pull`** reminder and session end runs **status → stage → commit (user or AI message) → push → append `SESSION_NOTES.md`**; align `AGENTS.md`, `context-first.mdc`, and `NEXT_CHAT_CHECKLIST.md`. Note: true “on editor close” automation is not possible—user must wrap up with the agent or ask to sync.
+- Files changed: `.cursor/rules/git-session-sync.mdc` (new), `.gitignore` (track `.cursor/rules/**`; ignore rest of `.cursor/`), `AGENTS.md`, `.cursor/rules/context-first.mdc`, `NEXT_CHAT_CHECKLIST.md`, `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - At end of future sessions, say “wrap up” / “sync” / “push” so the agent runs the full close sequence.
