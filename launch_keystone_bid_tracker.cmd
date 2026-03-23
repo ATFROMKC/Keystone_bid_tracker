@@ -6,18 +6,19 @@ cd /d "%~dp0"
 set "APP_SCRIPT=%~dp0scripts\launch_app.py"
 set "PYW=%~dp0.venv\Scripts\pythonw.exe"
 
+REM Non-empty start title avoids rare parsing bugs with quoted paths (spaces in "Keystone Tools").
 if exist "%PYW%" (
-  start "" "%PYW%" "%APP_SCRIPT%"
+  start "Keystone Bid Tracker" "%PYW%" "%APP_SCRIPT%"
   exit /b 0
 )
 where pythonw >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  start "" pythonw "%APP_SCRIPT%"
+  start "Keystone Bid Tracker" pythonw "%APP_SCRIPT%"
   exit /b 0
 )
 where pyw >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  start "" pyw -3 "%APP_SCRIPT%"
+  start "Keystone Bid Tracker" pyw -3 "%APP_SCRIPT%"
   exit /b 0
 )
 

@@ -622,3 +622,13 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Commit hash: `f05f1b8`
 - Follow-ups:
   - None.
+
+---
+
+### 2026-03-24 - Launcher diagnostics (trace + debug cmd)
+
+- Objective: Address launch still failing on one machine: add **`KeystoneBidTracker_launch_trace.txt`**, **`faulthandler`** log, non-empty **`start "Keystone Bid Tracker"`** title for `start`, and **`launch_keystone_bid_tracker_debug.cmd`** (`python.exe` + pause) to surface errors hidden by `pythonw`.
+- Files changed: `scripts/launch_app.py`, `launch_keystone_bid_tracker.cmd`, `launch_keystone_bid_tracker_debug.cmd` (new), `README.md`, `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - If debug shows nothing but trace stops mid-file, suspect antivirus or Qt DLL load; run `python keystone_bid_tracker\main.py` in a console.
