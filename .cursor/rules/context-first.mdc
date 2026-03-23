@@ -7,7 +7,7 @@ alwaysApply: true
 
 At the start of each new chat in this project:
 
-1. Read `AGENTS.md`, `PROJECT_CONTEXT.md`, `SESSION_NOTES.md`, and `NEXT_CHAT_CHECKLIST.md` if they exist.
+1. Read `AGENTS.md`, `PROJECT_CONTEXT.md`, `SESSION_NOTES.md`, `OTHER_PC_HANDOFF.md` (if present), and `NEXT_CHAT_CHECKLIST.md` if they exist.
 2. Also read `.cursor/rules/context-first.mdc` and `.cursor/rules/git-session-sync.mdc`.
 3. Before coding, provide:
    - a short project-state summary,
@@ -17,8 +17,8 @@ At the start of each new chat in this project:
 
 ## Conflict Handling
 
-- If docs conflict, trust current code first, then `PROJECT_CONTEXT.md`, then `SESSION_NOTES.md`.
-- Treat `HANDOFF.md` as legacy/history unless explicitly confirmed current.
+- If docs conflict, trust current code first, then `PROJECT_CONTEXT.md`, then `SESSION_NOTES.md`, then `OTHER_PC_HANDOFF.md` for the latest “other PC” note (ephemeral).
+- Treat `docs/HANDOFF.md` as legacy/history unless explicitly confirmed current. Prefer `OTHER_PC_HANDOFF.md` for the latest multi-PC “what I did” note.
 
 ## Session Close Reminder
 

@@ -48,6 +48,10 @@ Append a **new dated entry** at the end of `SESSION_NOTES.md` using the project�
 
 This replaces a separate yes/no-only prompt for session notes when the user completes the **full session-close** flow—unless they explicitly say **not** to update `SESSION_NOTES.md`.
 
+### 6. OTHER_PC_HANDOFF.md (optional, multi-PC)
+
+If the user cares about **two-machine sync**, offer to update **`OTHER_PC_HANDOFF.md`**: a few bullets under **Current handoff** (what changed, any follow-up on the other PC). Keep it short; they overwrite this section when they push meaningful work. If they say skip, leave it unchanged.
+
 ## Priority vs other rules
 
 For **session-start pull** and **session-end commit/push + SESSION_NOTES**, this rule **overrides** generic “do not commit unless asked” guidance in `AGENTS.md` **only** when the user is following this workflow.

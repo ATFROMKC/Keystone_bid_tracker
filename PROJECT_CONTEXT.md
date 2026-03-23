@@ -13,8 +13,9 @@
   1. code in `keystone_bid_tracker/`
   2. `PROJECT_CONTEXT.md`
   3. `SESSION_NOTES.md`
-  4. historical docs (`HANDOFF.md`, old specs/notes)
-- Use `HANDOFF.md` as archive context only, not present-state architecture.
+  4. `OTHER_PC_HANDOFF.md` (short “what I did before push” for the other machine—overwrite each session; not a full log)
+  5. historical docs (`docs/HANDOFF.md`, old specs/notes)
+- Use `docs/HANDOFF.md` as archive context only, not present-state architecture.
 
 ## Current Architecture
 

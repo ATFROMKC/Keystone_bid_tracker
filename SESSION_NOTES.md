@@ -632,3 +632,12 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Commit hash: `ec24482`
 - Follow-ups:
   - If debug shows nothing but trace stops mid-file, suspect antivirus or Qt DLL load; run `python keystone_bid_tracker\main.py` in a console.
+
+---
+
+### 2026-03-24 - OTHER_PC_HANDOFF.md + rule wiring
+
+- Objective: Add a short multi-PC handoff file (`OTHER_PC_HANDOFF.md`) overwritten when pushing meaningful work; agents read it after `SESSION_NOTES.md`. Wire into `AGENTS.md`, `PROJECT_CONTEXT.md`, `NEXT_CHAT_CHECKLIST.md`, `context-first.mdc`, `git-session-sync.mdc`.
+- Files changed: `OTHER_PC_HANDOFF.md`, `AGENTS.md`, `PROJECT_CONTEXT.md`, `NEXT_CHAT_CHECKLIST.md`, `SESSION_NOTES.md`, `.cursor/rules/context-first.mdc`, `.cursor/rules/git-session-sync.mdc`
+- Commit hash: `11a39f9`
+- Follow-ups: On other PC, `git pull` then read `OTHER_PC_HANDOFF.md` after each meaningful push from this machine.
