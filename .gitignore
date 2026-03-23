@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 
+# Local Python virtual environment (create per machine: python -m venv .venv)
+.venv/
+
 # Cursor: ignore local workspace data; keep shared rules tracked
 .cursor/*
 !.cursor/rules/

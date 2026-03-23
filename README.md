@@ -37,6 +37,18 @@ pip install -r requirements.txt
 python keystone_bid_tracker/main.py
 ```
 
+### Daily launch (no console window)
+
+From the repo root, double-click **`launch_keystone_bid_tracker.cmd`**, or run it from Explorer. It uses **`pythonw`** from `.venv` when present so a terminal window does not stay open.
+
+### Desktop shortcut (optional)
+
+After `.venv` exists, run:
+
+`powershell -ExecutionPolicy Bypass -File scripts\create_desktop_shortcut.ps1`
+
+That creates **Keystone Bid Tracker** on your Desktop with the Bid Tracker icon. On another PC, **`git pull`** brings the same scripts; create `.venv` there once, then run the shortcut script again (shortcuts are not stored in Git).
+
 ## Required Local Configuration (Per User)
 
 This project requires local credentials and local path configuration that are **not committed to Git**.

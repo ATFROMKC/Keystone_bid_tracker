@@ -40,6 +40,20 @@ def _asset_path(*parts: str) -> str:
     return os.path.join(_base_dir(), "Assets", *parts)
 
 
+def _apply_windows_taskbar_identity() -> None:
+    """Windows: taskbar/pin uses Bid Tracker icon instead of generic Python (before UI)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "Keystone.BidTracker.App.1.0"
+        )
+    except Exception:
+        LOGGER.debug("Could not set Windows AppUserModelID", exc_info=True)
+
+
 def _apply_app_icon(app: QApplication) -> None:
     """Apply the app icon when asset files are available."""
     icon_path = _asset_path("icons", "bidtracker.ico")
@@ -163,6 +177,7 @@ class PortalController:
 
 def main():
 
+    _apply_windows_taskbar_identity()
     app = QApplication(sys.argv)
     app.setApplicationName("Keystone Bid Tracker")
     app.setApplicationVersion(APP_VERSION)
