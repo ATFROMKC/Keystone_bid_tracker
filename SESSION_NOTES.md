@@ -641,3 +641,14 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Files changed: `OTHER_PC_HANDOFF.md`, `AGENTS.md`, `PROJECT_CONTEXT.md`, `NEXT_CHAT_CHECKLIST.md`, `SESSION_NOTES.md`, `.cursor/rules/context-first.mdc`, `.cursor/rules/git-session-sync.mdc`
 - Commit hash: `2420994`
 - Follow-ups: On other PC, `git pull` then read `OTHER_PC_HANDOFF.md` after each meaningful push from this machine.
+
+---
+
+### 2026-03-24 - Two-machine setup complete + DB conflict resolved
+
+- Objective: Full two-machine workflow established (Git clone on new PC, Git for Windows + Python installed, launcher diagnostics added). Dropbox SQLite conflicted copies cleaned up — deleted all duplicates, confirmed correct `.db` in use. Rule: one app instance at a time until DB architecture changes (API layer or hosted DB — parked for later).
+- Files changed: `SESSION_NOTES.md`
+- Commit hash: `n/a`
+- Follow-ups:
+  - Always close the app on one machine before opening on the other (prevents Dropbox conflict copies).
+  - Future build: move from Dropbox-synced SQLite to an API-wrapped or hosted DB for true multi-user support.
