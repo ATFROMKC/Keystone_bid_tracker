@@ -19,18 +19,18 @@
 
 ## Current handoff
 
-**Last updated:** 2026-03-23  
+**Last updated:** 2026-03-24  
 **Branch:** `main`
 
 **What I did:**
 
-- Added `OTHER_PC_HANDOFF.md` and wired it into `AGENTS.md`, `NEXT_CHAT_CHECKLIST.md`, `.cursor/rules/context-first.mdc`, and `.cursor/rules/git-session-sync.mdc` so agents read a short multi-PC note after `SESSION_NOTES.md`.
-- (Earlier on `main`: Windows launcher with `start ""`, desktop shortcut script, taskbar AppUserModelID, `.venv/` gitignored—see `SESSION_NOTES.md`.)
+- Added **`OTHER_PC_HANDOFF.md`** and wired it into **`AGENTS.md`**, **`PROJECT_CONTEXT.md`**, **`NEXT_CHAT_CHECKLIST.md`**, **`.cursor/rules/context-first.mdc`**, **`.cursor/rules/git-session-sync.mdc`** (session-end step 6: offer to refresh this file when pushing).
+- Remote `main` also has launcher diagnostics (`scripts/launch_app.py`, debug `.cmd`); see latest `SESSION_NOTES.md` if launch issues persist.
 
 **Heads-up for the other PC:**
 
-- `git pull` on `main`. If `requirements.txt` didn’t change, your existing `.venv` is fine.
-- If launch `.cmd` fails: ensure `.venv\Scripts\pythonw.exe` exists (`py -3 -m venv .venv` + `pip install -r requirements.txt`).
+- **`git pull`** on `main`. Read this file after pull.
+- If **`requirements.txt`** didn’t change, existing `.venv` is usually fine; if launch fails, ensure **`.venv\Scripts\pythonw.exe`** exists or use **`launch_keystone_bid_tracker_debug.cmd`** to see errors.
 
 **Open questions / none**
 
