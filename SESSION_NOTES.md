@@ -652,3 +652,16 @@ Use concise entries. Keep only high-signal notes that help the next session star
 - Follow-ups:
   - Always close the app on one machine before opening on the other (prevents Dropbox conflict copies).
   - Future build: move from Dropbox-synced SQLite to an API-wrapped or hosted DB for true multi-user support.
+
+---
+
+### 2026-08-10 - Bid Board / Outlook + CounterPro handoff package for Chip
+
+- Objective: Commit current Bid Board, Outlook read-only sync, and related app work; add curated `handoff/` docs for CounterPro mapping; push to `origin/main` and a new private Chip repo.
+- Files changed: `handoff/**`, Bid Board/Outlook UI+utils, `database.py`, `config.py`, `settings_tab.py`, `PROJECT_CONTEXT.md`, `.gitignore`, `requirements.txt`, `scripts/export_handoff_schema.py`, `scripts/make_handoff_zip.ps1`, `SESSION_NOTES.md`, `OTHER_PC_HANDOFF.md`
+- Commit hash: `433dc17` (feature + handoff docs); session-notes commit follows
+- Chip repo: https://github.com/ATFROMKC/Keystone-Bid-Tracker-Handoff (private; remote `chip-handoff`)
+- Follow-ups:
+  - Invite Chip as collaborator (Read) on `Keystone-Bid-Tracker-Handoff`
+  - Chip starts at `handoff/README.md` and `handoff/04-migration-to-counterpro/agent-kickoff-prompt.md`
+  - Other PC: `git pull` on `main`; if `requirements.txt` changed, refresh `.venv`

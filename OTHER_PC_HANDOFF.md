@@ -19,19 +19,20 @@
 
 ## Current handoff
 
-**Last updated:** 2026-03-24  
+**Last updated:** 2026-08-10  
 **Branch:** `main`
 
 **What I did:**
 
-- Added **`OTHER_PC_HANDOFF.md`** and wired it into **`AGENTS.md`**, **`PROJECT_CONTEXT.md`**, **`NEXT_CHAT_CHECKLIST.md`**, **`.cursor/rules/context-first.mdc`**, **`.cursor/rules/git-session-sync.mdc`** (session-end step 6: offer to refresh this file when pushing).
-- Remote `main` also has launcher diagnostics (`scripts/launch_app.py`, debug `.cmd`); see latest `SESSION_NOTES.md` if launch issues persist.
+- Shipped Bid Board + Outlook read-only sync + CounterPro `handoff/` docs (commit `433dc17`).
+- Pushed `origin/main` and mirrored to private Chip repo: https://github.com/ATFROMKC/Keystone-Bid-Tracker-Handoff (git remote `chip-handoff`).
 
 **Heads-up for the other PC:**
 
-- **`git pull`** on `main`. Read this file after pull.
-- If **`requirements.txt`** didn’t change, existing `.venv` is usually fine; if launch fails, ensure **`.venv\Scripts\pythonw.exe`** exists or use **`launch_keystone_bid_tracker_debug.cmd`** to see errors.
+- **`git pull`** on `main`.
+- `requirements.txt` changed — run `pip install -r requirements.txt` in `.venv`.
+- Still do **not** commit `config.json`. Local excludes remain: PDF / `_tmp_eids.json` / `outlook_com_poc.py`.
 
 **Open questions / none**
 
-- (Add anything the other machine should know that isn’t obvious from the diff.)
+- Invite Chip (GitHub username) as Read collaborator on the handoff repo if not done yet.
