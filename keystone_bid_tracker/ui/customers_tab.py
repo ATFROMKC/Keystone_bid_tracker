@@ -213,14 +213,13 @@ class CustomersTab(QWidget):
     def _on_edit(self):
         btn = self.sender()
         cid = btn.property("customer_id")
-        old_name = btn.property("customer_name")
-        name, ok = QInputDialog.getText(self, "Edit Account", "Account name:", text=old_name)
-        if ok and name.strip() and name.strip() != old_name:
-            existing = self.db.get_customer_by_name(name.strip())
-            if existing and existing["id"] != cid:
-                QMessageBox.warning(self, "Duplicate", f"Account '{name.strip()}' already exists.")
-                return
-            self.db.update_customer(cid, name.strip())
+        customers = self.db.get_customers()
+        customer = next((c for c in customers if c["id"] == cid), None)
+        if not customer:
+            return
+        from ui.edit_account_dialog import EditAccountDialog
+        dlg = EditAccountDialog(self.db, customer, self)
+        if dlg.exec_():
             self.refresh()
 
     def _on_toggle(self):

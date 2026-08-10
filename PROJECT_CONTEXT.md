@@ -143,7 +143,49 @@ the primary PM portal entry flow (which is now Active Jobs / Pending Award / Com
 - Material, Color, Meas type (TEMP/BOD), Method (Install/Pickup/Delivery) fields —
   not needed for any current calculations, add later if needed.
 
-## Known Constraints
+## Bid Board (Calendar)
+
+- A Bid Board item is an estimating **opportunity / calendar task**, not a BidTracker bid.
+- Relationship is **one board item → zero, one, or many normal bids** via `bid_board_item_bids`.
+  `created_bid_id` is legacy only (backfilled into the join table); do not use it as authority.
+- Multiple linked bids are distinct pricing paths (materials, thickness, VE, different accounts).
+  They are **not** revisions. Revisions remain per normal bid and are unchanged.
+- Complete Bid logs a normal bid (existing `AddBidDialog` + `_insert_bid_rows`), then asks
+  **Log Another Bid** vs **Finish & Mark Complete**. COMPLETE only on explicit Finish.
+  Logging more bids from an already-COMPLETE card is allowed; status stays COMPLETE.
+- NOT_BIDDING can produce zero bids. Card stays on `board_date` when COMPLETE (universal blue).
+
+## Outlook → Bid Board (read-only)
+
+- One-way sync only. Never create/edit/delete Outlook appointments (no Graph POST/PATCH/DELETE;
+  Classic Outlook COM never calls Save/Delete/Move/Send).
+- Two interchangeable **read** providers share one mapping/upsert engine (`outlook_board_sync`):
+  **Local Outlook Desktop** (Classic COM, default/pilot) and **Microsoft Graph** (kept for later).
+- Desktop provider attaches to the signed-in Classic Outlook profile; no tenant/client/password.
+  Shared **Commercial Bid** is listed from the nav pane / mounted Calendar folder.
+  Upsert key: `(outlook_calendar_id, outlook_event_id)` = `com:<folder EntryID>` + appointment EntryID.
+- Graph: delegated `Calendars.Read.Shared` + `User.Read`. Admin consent is **not** assumed;
+  if the tenant blocks user consent, Settings shows a clear message. Graph event ids use
+  `Prefer: IdType="ImmutableId"`. COM↔Graph rematch is out of scope for V1.
+- Shared calendar is chosen in Hub Settings (not hard-coded). V1 does **not** mark items missing
+  when they fall outside the rolling window. Outlook-sourced rows are never auto-deleted.
+- Fetch the full range first; upsert runs only after the fetch succeeds.
+- Graph calendarView window uses America/Chicago ISO offsets (DST-aware), not a hard-coded -05:00.
+- `source=LOCAL` items are never pushed to Outlook. Outlook COMPLETE may promote a card;
+  Outlook must not undo a local COMPLETE (with or without linked bids).
+- Default Sync Outlook window is **this week onward** (Monday → +120 days). Optional rolling
+  60-back/120-forward remains in Settings. One-time Import range is separate.
+- Board cards can **Mark Complete** without logging a bid, and **Link Existing Bid**
+  (date-proximity search + confirm). Unlink does not delete the normal bid.
+- Sync may **suggest** Actual Due Date and Accounts from Subject/Location/Body text
+  (`Due 8/11`, account names, emails). Suggestions are confirmed in a post-sync dialog
+  and applied only when those fields are empty — never overwrites local edits; unmatched
+  emails are shown but never auto-create accounts. Classic Outlook body reads run in a
+  killable subprocess (Trust Center may block; sync still works from Subject/Location).
+- Board search finds cards (including COMPLETE) by name/account/estimator/notes/location.
+- Calendar header shows estimator counts for the current view; Me filter uses current_estimator.
+- Complete Bid: sent/`original_bid_date` = today; optional bid `due_date` + `location` copied
+  from the board. Reports include Bids by Location.
 
 - Treat `HANDOFF.md` as historical context, not canonical current state.
 - Avoid changing portal architecture unless explicitly requested.

@@ -1,5 +1,7 @@
 __pycache__/
+**/__pycache__/
 *.py[cod]
+*.pyc
 
 # Local Python virtual environment (create per machine: python -m venv .venv)
 .venv/
@@ -11,6 +13,8 @@ __pycache__/
 
 # Local app/runtime configuration
 keystone_bid_tracker/config.json
+msal_token_cache.bin
+**/msal_token_cache.bin
 
 # Accidental nested-repo path
 keystone_bid_tracker/Keystone_bid_tracker/

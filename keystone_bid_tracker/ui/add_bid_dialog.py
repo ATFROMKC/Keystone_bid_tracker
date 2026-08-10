@@ -6,7 +6,7 @@ Modal form with customer multi-select, validation, and inline customer creation.
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QDateEdit,
     QTextEdit, QPushButton, QLabel, QListWidget, QListWidgetItem, QMessageBox,
-    QInputDialog, QWidget, QAbstractItemView, QComboBox,
+    QInputDialog, QWidget, QAbstractItemView, QComboBox, QCheckBox,
 )
 from PyQt5.QtCore import Qt, QDate
 
@@ -14,10 +14,11 @@ from PyQt5.QtCore import Qt, QDate
 class AddBidDialog(QDialog):
     """Dialog for adding or editing a bid."""
 
-    def __init__(self, db, parent=None, bid_data=None):
+    def __init__(self, db, parent=None, bid_data=None, initial_values=None):
         super().__init__(parent)
         self.db = db
         self.bid_data = bid_data
+        self.initial_values = initial_values
         self.result_data = None
 
         editing = bid_data is not None
@@ -28,6 +29,8 @@ class AddBidDialog(QDialog):
         self._build_ui()
         if editing:
             self._populate(bid_data)
+        elif initial_values:
+            self._apply_initial_values(initial_values)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -50,7 +53,26 @@ class AddBidDialog(QDialog):
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
         self.date_input.setDisplayFormat("MM/dd/yyyy")
-        form.addRow("Bid Date *", self.date_input)
+        form.addRow("Bid / Sent Date *", self.date_input)
+
+        self.due_date_check = QCheckBox("Has due date")
+        self.due_date_check.setChecked(False)
+        self.due_date_input = QDateEdit()
+        self.due_date_input.setCalendarPopup(True)
+        self.due_date_input.setDate(QDate.currentDate())
+        self.due_date_input.setDisplayFormat("MM/dd/yyyy")
+        self.due_date_input.setEnabled(False)
+        self.due_date_check.toggled.connect(self.due_date_input.setEnabled)
+        due_row = QHBoxLayout()
+        due_row.addWidget(self.due_date_check)
+        due_row.addWidget(self.due_date_input, 1)
+        due_wrap = QWidget()
+        due_wrap.setLayout(due_row)
+        form.addRow("Due Date", due_wrap)
+
+        self.location_input = QLineEdit()
+        self.location_input.setPlaceholderText("City, ST (optional)")
+        form.addRow("Location", self.location_input)
 
         self.estimator_input = QComboBox()
         self.estimator_input.setEditable(True)
@@ -98,6 +120,11 @@ class AddBidDialog(QDialog):
         cust_header.addWidget(add_cust_btn)
         layout.addLayout(cust_header)
 
+        self.selected_accounts_label = QLabel()
+        self.selected_accounts_label.setWordWrap(True)
+        self.selected_accounts_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self.selected_accounts_label)
+
         self.cust_search = QLineEdit()
         self.cust_search.setPlaceholderText("Search customers...")
         self.cust_search.textChanged.connect(self._filter_customers)
@@ -107,6 +134,7 @@ class AddBidDialog(QDialog):
         self.cust_list.setSelectionMode(QAbstractItemView.NoSelection)
         self.cust_list.setMinimumHeight(120)
         self.cust_list.setMaximumHeight(180)
+        self.cust_list.itemChanged.connect(self._refresh_selected_accounts_summary)
         layout.addWidget(self.cust_list)
 
         self._load_customers()
@@ -147,6 +175,20 @@ class AddBidDialog(QDialog):
             self.cust_list.addItem(item)
 
         self._filter_customers(self.cust_search.text().strip())
+        self._refresh_selected_accounts_summary()
+
+    def _refresh_selected_accounts_summary(self, *_args):
+        names = []
+        for i in range(self.cust_list.count()):
+            item = self.cust_list.item(i)
+            if item.checkState() == Qt.Checked:
+                names.append(item.text())
+        if names:
+            self.selected_accounts_label.setText(
+                "Selected accounts: " + ", ".join(names)
+            )
+        else:
+            self.selected_accounts_label.setText("Selected accounts: none")
 
     def _filter_customers(self, text):
         for i in range(self.cust_list.count()):
@@ -180,9 +222,45 @@ class AddBidDialog(QDialog):
 
     def _load_estimators(self):
         self.estimator_input.clear()
-        for estimator in self.db.get_estimators():
+        try:
+            names = self.db.get_all_estimator_names()
+        except Exception:
+            names = self.db.get_estimators()
+        for estimator in names:
             if estimator:
                 self.estimator_input.addItem(estimator)
+
+    def _apply_initial_values(self, values):
+        """Prefill add-mode fields (e.g. when completing a Bid Board item).
+
+        Only prefills known fields; totals/SF are intentionally left blank for the
+        user to enter after estimating. All fields remain editable.
+        """
+        if values.get("bid_name"):
+            self.name_input.setText(values["bid_name"])
+        if values.get("original_bid_date"):
+            d = QDate.fromString(values["original_bid_date"], "yyyy-MM-dd")
+            if d.isValid():
+                self.date_input.setDate(d)
+        if values.get("due_date"):
+            d = QDate.fromString(values["due_date"], "yyyy-MM-dd")
+            if d.isValid():
+                self.due_date_check.setChecked(True)
+                self.due_date_input.setDate(d)
+        if values.get("location"):
+            self.location_input.setText(values["location"])
+        estimator_name = values.get("estimator") or ""
+        if estimator_name:
+            idx = self.estimator_input.findText(estimator_name)
+            if idx >= 0:
+                self.estimator_input.setCurrentIndex(idx)
+            else:
+                self.estimator_input.setEditText(estimator_name)
+        if values.get("notes"):
+            self.notes_input.setPlainText(values["notes"])
+        customer_ids = values.get("customer_ids")
+        if customer_ids:
+            self._load_customers(select_ids=set(customer_ids))
 
     def _populate(self, data):
         self.name_input.setText(data.get("bid_name", ""))
@@ -190,6 +268,14 @@ class AddBidDialog(QDialog):
             d = QDate.fromString(data["original_bid_date"], "yyyy-MM-dd")
             if d.isValid():
                 self.date_input.setDate(d)
+        if data.get("due_date"):
+            d = QDate.fromString(data["due_date"], "yyyy-MM-dd")
+            if d.isValid():
+                self.due_date_check.setChecked(True)
+                self.due_date_input.setDate(d)
+        else:
+            self.due_date_check.setChecked(False)
+        self.location_input.setText(data.get("location") or "")
         estimator_name = data.get("estimator", "")
         idx = self.estimator_input.findText(estimator_name)
         if idx >= 0:
@@ -256,11 +342,16 @@ class AddBidDialog(QDialog):
             return
 
         bid_date = self.date_input.date().toString("yyyy-MM-dd")
+        due_date = None
+        if self.due_date_check.isChecked():
+            due_date = self.due_date_input.date().toString("yyyy-MM-dd")
 
         self.result_data = {
             "bid_name": bid_name,
             "estimator": estimator,
             "original_bid_date": bid_date,
+            "due_date": due_date,
+            "location": self.location_input.text().strip() or None,
             "bid_total": bid_total,
             "solid_surf_sf": solid_sf,
             "stone_sf": stone_sf,

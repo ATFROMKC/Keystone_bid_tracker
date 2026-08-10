@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QDateEdit, QComboBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFileDialog, QMessageBox,
     QFrame, QScrollArea, QGridLayout, QDialog, QCheckBox,
-    QTextEdit, QGroupBox,
+    QTextEdit, QGroupBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QDate, QMarginsF, QSizeF
 from PyQt5.QtGui import QTextDocument, QFont, QPageLayout, QPageSize
@@ -28,11 +28,12 @@ class ReportCard(QFrame):
     def __init__(self, title, parent=None):
         super().__init__(parent)
         self.setObjectName("card")
-        self.setMinimumWidth(160)
-        self.setFixedHeight(72)
+        self.setMinimumWidth(180)
+        self.setMinimumHeight(80)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(2)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
         self.value_label = QLabel("—")
         self.value_label.setObjectName("statValue")
         self.value_label.setStyleSheet("font-size: 22px;")
@@ -43,6 +44,20 @@ class ReportCard(QFrame):
 
     def set_value(self, val):
         self.value_label.setText(str(val))
+
+
+def _fit_report_table(table: QTableWidget, max_height: int = 280, row_height: int = 36):
+    """Keep report tables readable inside a scroll area (avoid Expanding crush)."""
+    table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    table.verticalHeader().setDefaultSectionSize(row_height)
+    header_h = max(table.horizontalHeader().height(), 28)
+    rows = max(table.rowCount(), 1)
+    # Show up to ~7 rows before scrolling inside the table
+    visible_rows = min(rows, 7)
+    height = header_h + visible_rows * row_height + 6
+    table.setFixedHeight(min(max(height, header_h + row_height + 6), max_height))
+    for r in range(table.rowCount()):
+        table.setRowHeight(r, row_height)
 
 
 class CustomerBidReportDialog(QDialog):
@@ -485,6 +500,8 @@ class ReportsTab(QWidget):
         self.date_from.setCalendarPopup(True)
         self.date_from.setDisplayFormat("MM/dd/yyyy")
         self.date_from.setDate(QDate.currentDate().addYears(-1))
+        self.date_from.setMinimumWidth(130)
+        self.date_from.setFixedWidth(135)
         filt.addWidget(self.date_from)
 
         filt.addWidget(QLabel("To:"))
@@ -492,6 +509,8 @@ class ReportsTab(QWidget):
         self.date_to.setCalendarPopup(True)
         self.date_to.setDisplayFormat("MM/dd/yyyy")
         self.date_to.setDate(QDate.currentDate())
+        self.date_to.setMinimumWidth(130)
+        self.date_to.setFixedWidth(135)
         filt.addWidget(self.date_to)
 
         self.est_combo = QComboBox()
@@ -543,9 +562,10 @@ class ReportsTab(QWidget):
         self.win_rate_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.win_rate_table.verticalHeader().setVisible(False)
         self.win_rate_table.setShowGrid(False)
-        self.win_rate_table.setMaximumHeight(180)
+        self.win_rate_table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         h = self.win_rate_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.Stretch)
+        _fit_report_table(self.win_rate_table, max_height=220)
         self.content_layout.addWidget(self.win_rate_table)
 
         # Bids by customer section
@@ -560,10 +580,28 @@ class ReportsTab(QWidget):
         self.cust_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.cust_table.verticalHeader().setVisible(False)
         self.cust_table.setShowGrid(False)
-        self.cust_table.setMaximumHeight(250)
+        self.cust_table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         h2 = self.cust_table.horizontalHeader()
         h2.setSectionResizeMode(0, QHeaderView.Stretch)
+        _fit_report_table(self.cust_table, max_height=280)
         self.content_layout.addWidget(self.cust_table)
+
+        loc_label = QLabel("Bids by Location")
+        loc_label.setObjectName("subheadingLabel")
+        self.content_layout.addWidget(loc_label)
+
+        self.loc_table = QTableWidget()
+        self.loc_table.setColumnCount(4)
+        self.loc_table.setHorizontalHeaderLabels(["Location", "Bids", "Won", "Total Value"])
+        self.loc_table.setAlternatingRowColors(True)
+        self.loc_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.loc_table.verticalHeader().setVisible(False)
+        self.loc_table.setShowGrid(False)
+        self.loc_table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        h_loc = self.loc_table.horizontalHeader()
+        h_loc.setSectionResizeMode(0, QHeaderView.Stretch)
+        _fit_report_table(self.loc_table, max_height=280)
+        self.content_layout.addWidget(self.loc_table)
 
         # Monthly volume chart
         chart_label = QLabel("Monthly Bid Volume")
@@ -634,7 +672,7 @@ class ReportsTab(QWidget):
             self.win_rate_table.setItem(row, 1, QTableWidgetItem(str(e["total"])))
             self.win_rate_table.setItem(row, 2, QTableWidgetItem(str(e["won"])))
             self.win_rate_table.setItem(row, 3, QTableWidgetItem(f"{e['rate']}%"))
-            self.win_rate_table.setRowHeight(row, 36)
+        _fit_report_table(self.win_rate_table, max_height=220)
 
         # By customer
         by_cust = self.db.get_bids_by_customer(df, dt, est, status)
@@ -646,7 +684,18 @@ class ReportsTab(QWidget):
             val_item = QTableWidgetItem(f"${c['total_value']:,.0f}")
             val_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.cust_table.setItem(row, 3, val_item)
-            self.cust_table.setRowHeight(row, 36)
+        _fit_report_table(self.cust_table, max_height=280)
+
+        by_loc = self.db.get_bids_by_location(df, dt, est, status)
+        self.loc_table.setRowCount(len(by_loc))
+        for row, loc in enumerate(by_loc):
+            self.loc_table.setItem(row, 0, QTableWidgetItem(loc.get("location_name") or "(No location)"))
+            self.loc_table.setItem(row, 1, QTableWidgetItem(str(loc.get("bid_count") or 0)))
+            self.loc_table.setItem(row, 2, QTableWidgetItem(str(loc.get("won_count") or 0)))
+            val_item = QTableWidgetItem(f"${(loc.get('total_value') or 0):,.0f}")
+            val_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.loc_table.setItem(row, 3, val_item)
+        _fit_report_table(self.loc_table, max_height=280)
 
         # Monthly chart
         monthly = self.db.get_monthly_volume(df, dt, est)

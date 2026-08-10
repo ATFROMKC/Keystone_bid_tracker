@@ -9,10 +9,20 @@ import sqlite3
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QFileDialog, QMessageBox, QFrame, QScrollArea,
+    QComboBox, QColorDialog, QDateEdit, QDialog,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QDate
 
-from config import get_config, save_config, get_database_path, set_database_path
+from config import (
+    get_config, save_config, get_database_path, set_database_path,
+    get_current_estimator, set_current_estimator, _auto_color_for,
+    get_bid_board_files_path, set_bid_board_files_path,
+    get_outlook_sync_config, save_outlook_sync_config,
+)
+from utils.outlook_sync_worker import (
+    OutlookListCalendarsWorker, OutlookTestWorker, OutlookSyncWorker,
+)
 
 
 APP_VERSION = "1.0.0"
@@ -167,6 +177,10 @@ class SettingsTab(QWidget):
 
         layout.addWidget(dropbox_frame)
 
+        # Bid Board (Calendar) section
+        layout.addWidget(self._build_bid_board_card())
+        layout.addWidget(self._build_outlook_sync_card())
+
         # Moraware Integration section
         mw_frame = QFrame()
         mw_frame.setObjectName("card")
@@ -234,6 +248,33 @@ class SettingsTab(QWidget):
 
         layout.addWidget(mw_frame)
 
+        # Legacy tools (kept out of the Estimator portal tab bar)
+        legacy_frame = QFrame()
+        legacy_frame.setObjectName("card")
+        legacy_layout = QVBoxLayout(legacy_frame)
+        legacy_layout.setContentsMargins(20, 16, 20, 16)
+        legacy_layout.setSpacing(12)
+
+        legacy_title = QLabel("Legacy Tools")
+        legacy_title.setObjectName("subheadingLabel")
+        legacy_layout.addWidget(legacy_title)
+
+        legacy_desc = QLabel(
+            "One-time Excel backlog import from the old Bid Tracker spreadsheet. "
+            "Hidden from the Estimator portal — open here only when you need it."
+        )
+        legacy_desc.setObjectName("secondaryLabel")
+        legacy_desc.setWordWrap(True)
+        legacy_layout.addWidget(legacy_desc)
+
+        excel_import_btn = QPushButton("Open Excel Import…")
+        excel_import_btn.setToolTip("Import historical bids from Bid_Tracker_Backlog.xlsx")
+        excel_import_btn.clicked.connect(self._open_excel_import)
+        excel_import_btn.setFixedWidth(180)
+        legacy_layout.addWidget(excel_import_btn)
+
+        layout.addWidget(legacy_frame)
+
         # Maintenance section
         maint_frame = QFrame()
         maint_frame.setObjectName("card")
@@ -279,6 +320,644 @@ class SettingsTab(QWidget):
 
         scroll.setWidget(container)
         outer.addWidget(scroll)
+
+    def _build_bid_board_card(self):
+        frame = QFrame()
+        frame.setObjectName("card")
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(20, 16, 20, 16)
+        v.setSpacing(12)
+
+        title = QLabel("Bid Board")
+        title.setObjectName("subheadingLabel")
+        v.addWidget(title)
+
+        desc = QLabel(
+            "Shared estimator roster and colors (saved in the database so both PCs match). "
+            "'My estimator' is this computer only, used by Assign to Me. "
+            "Completed cards always use universal blue."
+        )
+        desc.setObjectName("secondaryLabel")
+        desc.setWordWrap(True)
+        v.addWidget(desc)
+
+        me_row = QHBoxLayout()
+        me_label = QLabel("My estimator (this PC):")
+        me_label.setFixedWidth(160)
+        me_row.addWidget(me_label)
+        self.current_estimator_combo = QComboBox()
+        self.current_estimator_combo.setEditable(True)
+        self.current_estimator_combo.setInsertPolicy(QComboBox.NoInsert)
+        me_row.addWidget(self.current_estimator_combo, 1)
+        me_save_btn = QPushButton("Save")
+        me_save_btn.clicked.connect(self._on_save_current_estimator)
+        me_row.addWidget(me_save_btn)
+        v.addLayout(me_row)
+
+        roster_label = QLabel("Estimator roster")
+        roster_label.setObjectName("secondaryLabel")
+        v.addWidget(roster_label)
+
+        self.estimator_roster_container = QVBoxLayout()
+        self.estimator_roster_container.setSpacing(6)
+        v.addLayout(self.estimator_roster_container)
+
+        add_row = QHBoxLayout()
+        self.new_estimator_input = QLineEdit()
+        self.new_estimator_input.setPlaceholderText("New estimator name...")
+        add_row.addWidget(self.new_estimator_input, 1)
+        add_est_btn = QPushButton("Add estimator")
+        add_est_btn.clicked.connect(self._on_add_estimator)
+        add_row.addWidget(add_est_btn)
+        pull_btn = QPushButton("Pull estimators from bids")
+        pull_btn.clicked.connect(self._on_pull_estimators)
+        add_row.addWidget(pull_btn)
+        v.addLayout(add_row)
+
+        files_label = QLabel("Bid Board attachments folder")
+        files_label.setObjectName("secondaryLabel")
+        v.addWidget(files_label)
+        files_row = QHBoxLayout()
+        self.board_files_input = QLineEdit()
+        self.board_files_input.setPlaceholderText(r"Defaults to <database folder>\BidBoardFiles")
+        files_row.addWidget(self.board_files_input, 1)
+        files_browse = QPushButton("Browse...")
+        files_browse.clicked.connect(self._on_browse_board_files)
+        files_row.addWidget(files_browse)
+        files_save = QPushButton("Save")
+        files_save.clicked.connect(self._on_save_board_files)
+        files_row.addWidget(files_save)
+        v.addLayout(files_row)
+
+        self.bid_board_status_label = QLabel("")
+        self.bid_board_status_label.setWordWrap(True)
+        v.addWidget(self.bid_board_status_label)
+
+        self._load_bid_board_settings()
+        return frame
+
+    def _build_outlook_sync_card(self):
+        frame = QFrame()
+        frame.setObjectName("card")
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(20, 16, 20, 16)
+        v.setSpacing(12)
+
+        title = QLabel("Outlook Sync (read-only)")
+        title.setObjectName("subheadingLabel")
+        v.addWidget(title)
+
+        self.outlook_desc_label = QLabel("")
+        self.outlook_desc_label.setObjectName("secondaryLabel")
+        self.outlook_desc_label.setWordWrap(True)
+        v.addWidget(self.outlook_desc_label)
+
+        src_row = QHBoxLayout()
+        src_row.addWidget(QLabel("Outlook source:"))
+        self.outlook_provider_combo = QComboBox()
+        self.outlook_provider_combo.addItem("Local Outlook Desktop", "desktop")
+        self.outlook_provider_combo.addItem("Microsoft Graph", "graph")
+        self.outlook_provider_combo.currentIndexChanged.connect(self._on_outlook_provider_changed)
+        src_row.addWidget(self.outlook_provider_combo, 1)
+        src_row.addStretch()
+        v.addLayout(src_row)
+
+        self.outlook_graph_ids_widget = QWidget()
+        id_row = QHBoxLayout(self.outlook_graph_ids_widget)
+        id_row.setContentsMargins(0, 0, 0, 0)
+        self.outlook_tenant_input = QLineEdit()
+        self.outlook_tenant_input.setPlaceholderText("Directory (tenant) ID")
+        id_row.addWidget(self.outlook_tenant_input, 1)
+        self.outlook_client_input = QLineEdit()
+        self.outlook_client_input.setPlaceholderText("Application (client) ID")
+        id_row.addWidget(self.outlook_client_input, 1)
+        save_ids = QPushButton("Save IDs")
+        save_ids.clicked.connect(self._on_save_outlook_ids)
+        id_row.addWidget(save_ids)
+        v.addWidget(self.outlook_graph_ids_widget)
+
+        btn_row = QHBoxLayout()
+        self.outlook_signin_btn = QPushButton("Sign in to Microsoft 365")
+        self.outlook_signin_btn.clicked.connect(self._on_outlook_signin)
+        btn_row.addWidget(self.outlook_signin_btn)
+        self.outlook_signout_btn = QPushButton("Sign out")
+        self.outlook_signout_btn.clicked.connect(self._on_outlook_signout)
+        btn_row.addWidget(self.outlook_signout_btn)
+        refresh_cals = QPushButton("Refresh calendars")
+        refresh_cals.clicked.connect(self._on_outlook_refresh_calendars)
+        btn_row.addWidget(refresh_cals)
+        btn_row.addStretch()
+        v.addLayout(btn_row)
+
+        cal_row = QHBoxLayout()
+        cal_row.addWidget(QLabel("Shared calendar:"))
+        self.outlook_calendar_combo = QComboBox()
+        self.outlook_calendar_combo.setMinimumWidth(280)
+        cal_row.addWidget(self.outlook_calendar_combo, 1)
+        use_cal = QPushButton("Use selected")
+        use_cal.clicked.connect(self._on_save_outlook_calendar)
+        cal_row.addWidget(use_cal)
+        v.addLayout(cal_row)
+
+        test_row = QHBoxLayout()
+        test_btn = QPushButton("Test Connection")
+        test_btn.setObjectName("primaryButton")
+        test_btn.clicked.connect(self._on_outlook_test)
+        test_row.addWidget(test_btn)
+        test_row.addStretch()
+        v.addLayout(test_row)
+
+        win_row = QHBoxLayout()
+        win_row.addWidget(QLabel("Default Sync Outlook:"))
+        self.outlook_sync_window_combo = QComboBox()
+        self.outlook_sync_window_combo.addItem(
+            "This week onward (skip older completed work)", "week_onward"
+        )
+        self.outlook_sync_window_combo.addItem(
+            "Last 60 days + upcoming 120", "rolling"
+        )
+        self.outlook_sync_window_combo.currentIndexChanged.connect(
+            self._on_outlook_sync_window_changed
+        )
+        win_row.addWidget(self.outlook_sync_window_combo, 1)
+        v.addLayout(win_row)
+
+        imp_label = QLabel("One-time import range (does not change default Sync)")
+        imp_label.setObjectName("secondaryLabel")
+        v.addWidget(imp_label)
+        imp_row = QHBoxLayout()
+        self.outlook_import_start = QDateEdit()
+        self.outlook_import_start.setCalendarPopup(True)
+        self.outlook_import_start.setDisplayFormat("MM/dd/yyyy")
+        self.outlook_import_end = QDateEdit()
+        self.outlook_import_end.setCalendarPopup(True)
+        self.outlook_import_end.setDisplayFormat("MM/dd/yyyy")
+        today = QDate.currentDate()
+        self.outlook_import_start.setDate(today.addDays(-60))
+        self.outlook_import_end.setDate(today.addDays(120))
+        imp_row.addWidget(QLabel("Start"))
+        imp_row.addWidget(self.outlook_import_start)
+        imp_row.addWidget(QLabel("End"))
+        imp_row.addWidget(self.outlook_import_end)
+        preset_btn = QPushButton("Last 60 days + upcoming")
+        preset_btn.clicked.connect(self._on_outlook_preset_range)
+        imp_row.addWidget(preset_btn)
+        week_btn = QPushButton("This week onward")
+        week_btn.clicked.connect(self._on_outlook_week_preset)
+        imp_row.addWidget(week_btn)
+        import_btn = QPushButton("Import range")
+        import_btn.clicked.connect(self._on_outlook_import_range)
+        imp_row.addWidget(import_btn)
+        imp_row.addStretch()
+        v.addLayout(imp_row)
+
+        self.outlook_status_label = QLabel("")
+        self.outlook_status_label.setWordWrap(True)
+        v.addWidget(self.outlook_status_label)
+
+        self._outlook_calendars = []
+        self._outlook_provider_ready = False
+        self._load_outlook_settings()
+        return frame
+
+    def _outlook_provider(self) -> str:
+        data = self.outlook_provider_combo.currentData()
+        return data if data in ("desktop", "graph") else "desktop"
+
+    def _apply_outlook_provider_ui(self):
+        is_graph = self._outlook_provider() == "graph"
+        self.outlook_graph_ids_widget.setVisible(is_graph)
+        self.outlook_signin_btn.setVisible(is_graph)
+        self.outlook_signout_btn.setVisible(is_graph)
+        if is_graph:
+            self.outlook_desc_label.setText(
+                "One-way import from the shared Outlook bid calendar into Bid Board. "
+                "Microsoft Graph requests Calendars.Read.Shared (and User.Read) only. "
+                "It cannot create, edit, or delete Outlook events. "
+                "If sign-in says consent is blocked, an admin must approve those read "
+                "permissions — still no write access."
+            )
+        else:
+            self.outlook_desc_label.setText(
+                "One-way import from Classic Outlook on this PC into Bid Board. "
+                "Uses your already signed-in Outlook profile — no Microsoft password "
+                "or tenant/client IDs. Bid Tracker only reads appointments; it never "
+                "creates, edits, or deletes Outlook events. "
+                "Sync can fill empty Actual Due Date / Accounts from appointment text "
+                "(Subject, Location, and Body when Outlook allows). "
+                "If Body reads hang, allow programmatic access in Outlook Trust Center, "
+                "or sync still works from Subject/Location alone."
+            )
+
+    def _on_outlook_provider_changed(self):
+        if not getattr(self, "_outlook_provider_ready", False):
+            return
+        save_outlook_sync_config({"provider": self._outlook_provider()})
+        self._apply_outlook_provider_ui()
+        self.outlook_status_label.setText(
+            "Source saved. Refresh calendars and select Commercial Bid."
+        )
+
+    def _calendar_combo_label(self, cal: dict) -> str:
+        name = cal.get("name") or "(unnamed)"
+        owner = ""
+        ow = cal.get("owner")
+        if isinstance(ow, dict):
+            owner = (ow.get("name") or ow.get("address") or "").strip()
+        elif ow:
+            owner = str(ow).strip()
+        path = (cal.get("path") or "").strip()
+        bits = [b for b in (owner, path) if b]
+        if bits:
+            return f"{name}  ({' · '.join(bits)})"
+        return name
+
+    def _load_outlook_settings(self):
+        cfg = get_outlook_sync_config()
+        self._outlook_provider_ready = False
+        provider = cfg.get("provider") or "desktop"
+        idx = self.outlook_provider_combo.findData(provider)
+        if idx < 0:
+            idx = 0
+        self.outlook_provider_combo.setCurrentIndex(idx)
+        win_idx = self.outlook_sync_window_combo.findData(cfg.get("sync_window") or "week_onward")
+        self.outlook_sync_window_combo.blockSignals(True)
+        self.outlook_sync_window_combo.setCurrentIndex(win_idx if win_idx >= 0 else 0)
+        self.outlook_sync_window_combo.blockSignals(False)
+        self._outlook_provider_ready = True
+        self._apply_outlook_provider_ui()
+        self.outlook_tenant_input.setText(cfg.get("tenant_id") or "")
+        self.outlook_client_input.setText(cfg.get("client_id") or "")
+        self.outlook_calendar_combo.clear()
+        name = cfg.get("calendar_name") or ""
+        owner = cfg.get("calendar_owner") or ""
+        path = cfg.get("calendar_path") or ""
+        cid = cfg.get("calendar_id") or ""
+        if cid:
+            fake = {"name": name or cid[:20], "owner": {"name": owner}, "path": path}
+            self.outlook_calendar_combo.addItem(self._calendar_combo_label(fake), cid)
+        last = cfg.get("last_synced_at") or ""
+        if last:
+            self.outlook_status_label.setText(f"Last synced: {last}")
+
+    def _on_save_outlook_ids(self):
+        save_outlook_sync_config({
+            "tenant_id": self.outlook_tenant_input.text().strip(),
+            "client_id": self.outlook_client_input.text().strip(),
+        })
+        self.outlook_status_label.setText("Saved tenant and client IDs on this PC.")
+
+    def _on_outlook_signin(self):
+        self._on_save_outlook_ids()
+        self.outlook_status_label.setText("Signing in… a browser window may open.")
+        try:
+            from utils.outlook_graph_client import OutlookGraphClient, OutlookAuthError, CONSENT_HINT
+            cfg = get_outlook_sync_config()
+            client = OutlookGraphClient(cfg["tenant_id"], cfg["client_id"])
+            client.acquire_token(interactive=True)
+            me = client.get_me()
+            name = me.get("displayName") or me.get("userPrincipalName") or "Signed in"
+            self.outlook_status_label.setText(f"Signed in as {name}.")
+            self._on_outlook_refresh_calendars()
+        except OutlookAuthError as e:
+            msg = (CONSENT_HINT + "\n\nDetails: " + str(e)) if e.consent_required else str(e)
+            self.outlook_status_label.setText(msg)
+            QMessageBox.warning(self, "Outlook sign-in", msg)
+        except Exception as e:
+            self.outlook_status_label.setText(str(e))
+            QMessageBox.warning(self, "Outlook sign-in", str(e))
+
+    def _on_outlook_signout(self):
+        import os
+        from utils.outlook_graph_client import token_cache_path
+        try:
+            cfg = get_outlook_sync_config()
+            if cfg.get("tenant_id") and cfg.get("client_id"):
+                from utils.outlook_graph_client import OutlookGraphClient
+                OutlookGraphClient(cfg["tenant_id"], cfg["client_id"]).sign_out()
+        except Exception:
+            p = token_cache_path()
+            if os.path.isfile(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+        self.outlook_status_label.setText("Signed out. Tokens cleared on this PC.")
+
+    def _on_outlook_refresh_calendars(self):
+        self.outlook_status_label.setText("Loading calendars…")
+        self._outlook_list_worker = OutlookListCalendarsWorker()
+        self._outlook_list_worker.finished.connect(self._on_outlook_calendars_loaded)
+        self._outlook_list_worker.start()
+
+    def _on_outlook_calendars_loaded(self, ok, msg, cals):
+        if not ok:
+            self.outlook_status_label.setText(msg)
+            QMessageBox.warning(self, "Outlook calendars", msg)
+            return
+        self._outlook_calendars = cals or []
+        current_id = get_outlook_sync_config().get("calendar_id") or ""
+        self.outlook_calendar_combo.clear()
+        select_idx = 0
+        for i, cal in enumerate(self._outlook_calendars):
+            self.outlook_calendar_combo.addItem(self._calendar_combo_label(cal), cal.get("id"))
+            if cal.get("id") == current_id:
+                select_idx = i
+        if self.outlook_calendar_combo.count():
+            self.outlook_calendar_combo.setCurrentIndex(select_idx)
+        self.outlook_status_label.setText(msg)
+
+    def _on_save_outlook_calendar(self):
+        cid = self.outlook_calendar_combo.currentData()
+        if not cid:
+            QMessageBox.warning(self, "Outlook calendar", "Select a calendar first.")
+            return
+        cal = next((c for c in (self._outlook_calendars or []) if c.get("id") == cid), None)
+        if cal:
+            name = cal.get("name") or ""
+            ow = cal.get("owner") or {}
+            owner = (ow.get("name") or ow.get("address") or "") if isinstance(ow, dict) else str(ow or "")
+            path = cal.get("path") or ""
+            store_id = cal.get("store_id") or ""
+        else:
+            label = self.outlook_calendar_combo.currentText()
+            name, owner, path, store_id = label, "", "", ""
+            if "  (" in label and label.endswith(")"):
+                name, rest = label.rsplit("  (", 1)
+                owner = rest[:-1]
+        save_outlook_sync_config({
+            "provider": self._outlook_provider(),
+            "calendar_id": cid,
+            "calendar_name": (name or "").strip(),
+            "calendar_owner": (owner or "").strip(),
+            "calendar_path": (path or "").strip(),
+            "calendar_store_id": (store_id or "").strip(),
+        })
+        self.outlook_status_label.setText(f"Using calendar: {(name or cid).strip()}")
+
+    def _on_outlook_test(self):
+        self._on_save_outlook_calendar()
+        self.outlook_status_label.setText("Testing read-only calendar access…")
+        self._outlook_test_worker = OutlookTestWorker()
+        self._outlook_test_worker.finished.connect(self._on_outlook_test_done)
+        self._outlook_test_worker.start()
+
+    def _on_outlook_test_done(self, ok, msg):
+        self.outlook_status_label.setText(msg)
+        if not ok:
+            QMessageBox.warning(self, "Test Connection", msg)
+        else:
+            QMessageBox.information(self, "Test Connection", msg)
+
+    def _on_outlook_preset_range(self):
+        today = QDate.currentDate()
+        self.outlook_import_start.setDate(today.addDays(-60))
+        self.outlook_import_end.setDate(today.addDays(120))
+
+    def _on_outlook_week_preset(self):
+        today = QDate.currentDate()
+        monday = today.addDays(-today.dayOfWeek() + 1)  # Qt Monday=1
+        self.outlook_import_start.setDate(monday)
+        self.outlook_import_end.setDate(today.addDays(120))
+
+    def _on_outlook_sync_window_changed(self):
+        if not getattr(self, "_outlook_provider_ready", False):
+            return
+        mode = self.outlook_sync_window_combo.currentData() or "week_onward"
+        save_outlook_sync_config({"sync_window": mode})
+        if mode == "week_onward":
+            self.outlook_status_label.setText(
+                "Sync Outlook will read this week onward (not older history)."
+            )
+        else:
+            self.outlook_status_label.setText(
+                "Sync Outlook will read the last 60 days plus upcoming 120 days."
+            )
+
+    def _on_outlook_import_range(self):
+        self._on_save_outlook_calendar()
+        sd = self.outlook_import_start.date().toPyDate()
+        ed = self.outlook_import_end.date().toPyDate()
+        self.outlook_status_label.setText("Importing Outlook events (read-only)…")
+        self._outlook_import_worker = OutlookSyncWorker(self.db, sd, ed)
+        self._outlook_import_worker.finished.connect(self._on_outlook_import_done)
+        self._outlook_import_worker.start()
+
+    def _on_outlook_import_done(self, ok, msg, result):
+        self.outlook_status_label.setText(msg)
+        if not ok:
+            QMessageBox.warning(self, "Outlook import", msg)
+            return
+        due_applied = 0
+        account_applied = 0
+        candidates = (result or {}).get("hint_candidates") or []
+        if candidates:
+            from ui.outlook_hint_review_dialog import OutlookHintReviewDialog
+            review = OutlookHintReviewDialog(candidates, self)
+            if review.exec_() == QDialog.Accepted:
+                for row in review.accepted_applies:
+                    try:
+                        applied = self.db.apply_board_item_outlook_hints(
+                            row["item_id"],
+                            actual_due_date=row.get("actual_due_date"),
+                            customer_ids=row.get("customer_ids"),
+                        )
+                        if applied.get("due_date"):
+                            due_applied += 1
+                        account_applied += int(applied.get("customers") or 0)
+                    except Exception:
+                        pass
+        extra = []
+        if due_applied:
+            extra.append(f"{due_applied} due date(s) applied")
+        if account_applied:
+            extra.append(f"{account_applied} account link(s) applied")
+        full = msg if not extra else msg.rstrip(".") + "; " + ", ".join(extra) + "."
+        self.outlook_status_label.setText(full)
+        QMessageBox.information(self, "Outlook import", full)
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+            elif item.layout() is not None:
+                self._clear_layout(item.layout())
+
+    def _load_bid_board_settings(self):
+        try:
+            roster = self.db.get_estimators_roster(active_only=False)
+        except Exception:
+            roster = []
+        names = [r["name"] for r in roster if r.get("name")]
+        extra = self.db.get_all_estimator_names() if hasattr(self.db, "get_all_estimator_names") else []
+        combo_names = list(dict.fromkeys(names + extra))
+
+        current = get_current_estimator()
+        self.current_estimator_combo.blockSignals(True)
+        self.current_estimator_combo.clear()
+        self.current_estimator_combo.addItem("")
+        for e in combo_names:
+            self.current_estimator_combo.addItem(e)
+        if current:
+            idx = self.current_estimator_combo.findText(current)
+            if idx >= 0:
+                self.current_estimator_combo.setCurrentIndex(idx)
+            else:
+                self.current_estimator_combo.setEditText(current)
+        self.current_estimator_combo.blockSignals(False)
+
+        self._clear_layout(self.estimator_roster_container)
+        if not roster:
+            hint = QLabel("No estimators yet. Add one above, or pull names from existing bids.")
+            hint.setObjectName("secondaryLabel")
+            self.estimator_roster_container.addWidget(hint)
+        else:
+            for row in roster:
+                self.estimator_roster_container.addLayout(self._build_roster_row(row))
+
+        self.board_files_input.setText(get_bid_board_files_path(self.db.db_path))
+
+    def _build_roster_row(self, row):
+        eid = row["id"]
+        name = row["name"]
+        color_hex = row.get("color") or _auto_color_for(name)
+        lay = QHBoxLayout()
+
+        name_edit = QLineEdit(name)
+        name_edit.setFixedWidth(180)
+        lay.addWidget(name_edit)
+
+        swatch = QLabel()
+        swatch.setFixedSize(40, 20)
+        swatch.setStyleSheet(
+            f"background-color: {color_hex}; border: 1px solid #3a3a3a; border-radius: 4px;"
+        )
+        lay.addWidget(swatch)
+
+        change_btn = QPushButton("Change...")
+        change_btn.clicked.connect(
+            lambda _, i=eid, n=name_edit, s=swatch: self._on_roster_pick_color(i, n, s)
+        )
+        lay.addWidget(change_btn)
+
+        rename_btn = QPushButton("Save name")
+        rename_btn.clicked.connect(lambda _, i=eid, n=name_edit: self._on_roster_rename(i, n))
+        lay.addWidget(rename_btn)
+
+        remove_btn = QPushButton("Remove")
+        remove_btn.setObjectName("dangerButton")
+        remove_btn.clicked.connect(lambda _, i=eid, n=name: self._on_roster_remove(i, n))
+        lay.addWidget(remove_btn)
+        lay.addStretch()
+        return lay
+
+    def _on_roster_pick_color(self, estimator_id, name_edit, swatch):
+        name = name_edit.text().strip()
+        start = QColor(swatch.palette().window().color())
+        color = QColorDialog.getColor(start, self, f"Color for {name or 'estimator'}")
+        if not color.isValid():
+            return
+        hex_color = color.name()
+        try:
+            self.db.update_estimator(estimator_id, color=hex_color)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+            return
+        swatch.setStyleSheet(
+            f"background-color: {hex_color}; border: 1px solid #3a3a3a; border-radius: 4px;"
+        )
+        self.bid_board_status_label.setText(f"Saved color for {name}.")
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+
+    def _on_roster_rename(self, estimator_id, name_edit):
+        name = name_edit.text().strip()
+        try:
+            self.db.update_estimator(estimator_id, name=name)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+            return
+        self.bid_board_status_label.setText(f"Saved estimator name: {name}.")
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+        self._load_bid_board_settings()
+
+    def _on_roster_remove(self, estimator_id, name):
+        confirm = QMessageBox.question(
+            self, "Remove estimator",
+            f"Remove '{name}' from the roster?\nExisting bids keep this name; only the color assignment is removed.",
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        self.db.delete_estimator(estimator_id)
+        self.bid_board_status_label.setText(f"Removed {name}.")
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+        self._load_bid_board_settings()
+
+    def _on_add_estimator(self):
+        name = self.new_estimator_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Missing name", "Enter an estimator name.")
+            return
+        try:
+            self.db.add_estimator(name)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+            return
+        self.new_estimator_input.clear()
+        self.bid_board_status_label.setText(f"Added {name}.")
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+        self._load_bid_board_settings()
+
+    def _on_pull_estimators(self):
+        added = self.db.pull_estimators_from_bids()
+        self.bid_board_status_label.setText(
+            f"Pulled {added} estimator(s) from existing bids/board items."
+            if added else "Roster already includes all known estimators."
+        )
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+        self._load_bid_board_settings()
+
+    def _on_browse_board_files(self):
+        path = QFileDialog.getExistingDirectory(
+            self, "Select Bid Board attachments folder",
+            self.board_files_input.text() or os.path.expanduser("~/Dropbox"),
+        )
+        if path:
+            self.board_files_input.setText(path)
+
+    def _on_save_board_files(self):
+        path = self.board_files_input.text().strip()
+        set_bid_board_files_path(path)
+        self.bid_board_status_label.setText("Attachments folder saved.")
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+
+    def _on_save_current_estimator(self):
+        name = self.current_estimator_combo.currentText().strip()
+        set_current_estimator(name)
+        if name:
+            self.bid_board_status_label.setText(f"'Assign to Me' will assign: {name}.")
+        else:
+            self.bid_board_status_label.setText("Cleared this PC's estimator identity.")
+        self.bid_board_status_label.setStyleSheet("color: #4caf50;")
+
+    def _open_excel_import(self):
+        from ui.import_tab import ImportTab
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Excel Import (legacy)")
+        dlg.setMinimumSize(900, 640)
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(ImportTab(self.db, dlg))
+        close_row = QHBoxLayout()
+        close_row.setContentsMargins(16, 8, 16, 12)
+        close_row.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        close_row.addWidget(close_btn)
+        lay.addLayout(close_row)
+        dlg.exec_()
 
     def _on_browse(self):
         path, _ = QFileDialog.getSaveFileName(
@@ -435,3 +1114,4 @@ class SettingsTab(QWidget):
         self.mw_user_input.setText(cfg.get("moraware_username", ""))
         self.mw_pass_input.setText(cfg.get("moraware_password", ""))
         self.dropbox_path_input.setText(cfg.get("dropbox_bids_path", ""))
+        self._load_bid_board_settings()

@@ -19,9 +19,9 @@ from PyQt5.QtGui import QPixmap
 
 from database import Database
 from ui.bids_tab import BidsTab
+from ui.calendar_tab import CalendarTab
 from ui.customers_tab import CustomersTab
 from ui.reports_tab import ReportsTab
-from ui.import_tab import ImportTab
 from ui.pm_active_jobs_tab import PMActiveJobsTab
 from ui.pm_pending_award_tab import PMPendingAwardTab
 from ui.pm_history_tab import PMHistoryTab
@@ -144,15 +144,15 @@ class EstimatorWindow(PortalWindowBase):
 
         back_btn = QPushButton("Back to Hub")
         back_btn.clicked.connect(self._open_hub_cb)
-        layout.addWidget(self._build_header("Estimator Portal", "Bids, Import, and Reports", right_widget=back_btn))
+        layout.addWidget(self._build_header("Estimator Portal", "Bids, Calendar, and Reports", right_widget=back_btn))
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.bids_tab = BidsTab(self.db, self)
-        self.import_tab = ImportTab(self.db, self)
+        self.calendar_tab = CalendarTab(self.db, self)
         self.reports_tab = ReportsTab(self.db, self)
         self.tabs.addTab(self.bids_tab, "Bids")
-        self.tabs.addTab(self.import_tab, "Import")
+        self.tabs.addTab(self.calendar_tab, "Calendar")
         self.tabs.addTab(self.reports_tab, "Reports")
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)

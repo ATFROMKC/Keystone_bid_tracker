@@ -310,7 +310,7 @@ QComboBox QAbstractItemView::item:hover {
 /* ============================================================
    DATE EDIT / SPIN BOX
    ============================================================ */
-QDateEdit, QSpinBox, QDoubleSpinBox {
+QDateEdit, QTimeEdit, QSpinBox, QDoubleSpinBox {
     background-color: #333333;
     color: #f0f0f0;
     border: 1px solid #3a3a3a;
@@ -319,11 +319,12 @@ QDateEdit, QSpinBox, QDoubleSpinBox {
     font-size: 13px;
 }
 
-QDateEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+QDateEdit:focus, QTimeEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {
     border: 1px solid #4a9eff;
 }
 
-QDateEdit::drop-down, QSpinBox::up-button, QSpinBox::down-button,
+QDateEdit::drop-down, QTimeEdit::up-button, QTimeEdit::down-button,
+QSpinBox::up-button, QSpinBox::down-button,
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
     border: none;
     width: 24px;

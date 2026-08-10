@@ -451,6 +451,14 @@ class BidsTab(QWidget):
         self._selected_bid_id = bid_id
         self.detail_panel.load_bid(self.db, bid_id)
 
+    def open_bid(self, bid_id):
+        """Select and show a bid (used from Bid Board linked bids)."""
+        self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
+        try:
+            self._show_detail(bid_id)
+        except Exception:
+            QMessageBox.warning(self, "Bid not found", f"Could not open bid #{bid_id}.")
+
     def _on_hide_detail(self):
         self.detail_panel.hide()
 
@@ -641,6 +649,7 @@ class BidsTab(QWidget):
                 d["bid_name"], d["estimator"], d["original_bid_date"],
                 d["notes"], d["customer_ids"], d["bid_total"],
                 d["solid_surf_sf"], d["stone_sf"],
+                due_date=d.get("due_date"), location=d.get("location"),
             )
             self._refresh_filter_combos()
             self._load_bids(scroll_to_bottom=False, select_bid_id=bid_id)
@@ -655,6 +664,7 @@ class BidsTab(QWidget):
             self.db.update_bid(
                 bid_id, d["bid_name"], d["estimator"],
                 d["original_bid_date"], d["notes"], d["customer_ids"],
+                due_date=d.get("due_date"), location=d.get("location"),
             )
             # Update revision 1 totals if this is the only revision
             latest = self.db.get_latest_revision(bid_id)

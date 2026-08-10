@@ -123,6 +123,68 @@ class Database:
                         REFERENCES bid_moraware_links(bid_id, moraware_job_id)
                         ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS bid_board_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bid_name TEXT NOT NULL,
+                    board_date TEXT NOT NULL,
+                    actual_due_date TEXT,
+                    actual_due_time TEXT,
+                    estimator TEXT,
+                    board_status TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+                    notes TEXT,
+                    completed_at TEXT,
+                    created_bid_id INTEGER REFERENCES bids(id),
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS bid_board_item_customers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    board_item_id INTEGER NOT NULL REFERENCES bid_board_items(id) ON DELETE CASCADE,
+                    customer_id INTEGER NOT NULL REFERENCES customers(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS estimators (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    color TEXT,
+                    active INTEGER DEFAULT 1,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS customer_contacts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+                    email TEXT NOT NULL,
+                    name TEXT,
+                    active INTEGER DEFAULT 1,
+                    created_at TEXT DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS bid_board_item_contacts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    board_item_id INTEGER NOT NULL REFERENCES bid_board_items(id) ON DELETE CASCADE,
+                    customer_contact_id INTEGER NOT NULL REFERENCES customer_contacts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS bid_board_attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    board_item_id INTEGER NOT NULL REFERENCES bid_board_items(id) ON DELETE CASCADE,
+                    kind TEXT NOT NULL,
+                    label TEXT,
+                    value TEXT NOT NULL,
+                    created_at TEXT DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS bid_board_item_bids (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    board_item_id INTEGER NOT NULL REFERENCES bid_board_items(id) ON DELETE CASCADE,
+                    bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    UNIQUE(board_item_id, bid_id)
+                );
             """)
 
             new_columns = [
@@ -150,6 +212,15 @@ class Database:
                 ("invoice_data", "contact_customer_notes", "TEXT"),
                 ("invoice_data", "moraware_job_id", "TEXT"),
                 ("bid_moraware_links", "moraware_job_name", "TEXT"),
+                ("bid_board_items", "location", "TEXT"),
+                ("bid_board_items", "source", "TEXT DEFAULT 'LOCAL'"),
+                ("bid_board_items", "outlook_event_id", "TEXT"),
+                ("bid_board_items", "outlook_calendar_id", "TEXT"),
+                ("bid_board_items", "outlook_last_modified", "TEXT"),
+                ("bid_board_items", "outlook_last_synced", "TEXT"),
+                ("bid_board_items", "outlook_source_notes", "TEXT"),
+                ("bids", "due_date", "TEXT"),
+                ("bids", "location", "TEXT"),
             ]
             for table, col, col_type in new_columns:
                 try:
@@ -176,7 +247,28 @@ class Database:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_bid_moraware_links_primary
                     ON bid_moraware_links(bid_id) WHERE is_primary = 1;
                 CREATE INDEX IF NOT EXISTS idx_bid_moraware_allocations_bid_id ON bid_moraware_allocations(bid_id);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_items_board_date ON bid_board_items(board_date);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_items_board_status ON bid_board_items(board_status);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_items_estimator ON bid_board_items(estimator);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_item_customers_item ON bid_board_item_customers(board_item_id);
+                CREATE INDEX IF NOT EXISTS idx_estimators_name ON estimators(name);
+                CREATE INDEX IF NOT EXISTS idx_customer_contacts_customer ON customer_contacts(customer_id);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_item_contacts_item ON bid_board_item_contacts(board_item_id);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_attachments_item ON bid_board_attachments(board_item_id);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_item_bids_item ON bid_board_item_bids(board_item_id);
+                CREATE INDEX IF NOT EXISTS idx_bid_board_item_bids_bid ON bid_board_item_bids(bid_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_board_outlook_event
+                    ON bid_board_items(outlook_calendar_id, outlook_event_id)
+                    WHERE outlook_event_id IS NOT NULL;
             """)
+
+            conn.execute(
+                """INSERT OR IGNORE INTO bid_board_item_bids (board_item_id, bid_id)
+                   SELECT id, created_bid_id FROM bid_board_items
+                   WHERE created_bid_id IS NOT NULL"""
+            )
+
+            self._seed_estimators_if_empty(conn)
 
             conn.execute(
                 """
@@ -312,9 +404,61 @@ class Database:
                 )
             """)
             conn.execute(
+                "UPDATE bid_board_item_customers SET customer_id = ? WHERE customer_id = ?",
+                (merge_into_id, merge_from_id),
+            )
+            conn.execute("""
+                DELETE FROM bid_board_item_customers WHERE id NOT IN (
+                    SELECT MIN(id) FROM bid_board_item_customers
+                    GROUP BY board_item_id, customer_id
+                )
+            """)
+            conn.execute(
                 "UPDATE bids SET won_customer_id = ? WHERE won_customer_id = ?",
                 (merge_into_id, merge_from_id),
             )
+            # Reassign contacts; drop duplicates that already exist on the kept account
+            into_emails = {
+                (r["email"] or "").strip().lower()
+                for r in conn.execute(
+                    "SELECT email FROM customer_contacts WHERE customer_id = ?",
+                    (merge_into_id,),
+                ).fetchall()
+            }
+            from_contacts = conn.execute(
+                "SELECT id, email FROM customer_contacts WHERE customer_id = ?",
+                (merge_from_id,),
+            ).fetchall()
+            for fc in from_contacts:
+                email_key = (fc["email"] or "").strip().lower()
+                if email_key and email_key in into_emails:
+                    into_row = conn.execute(
+                        """SELECT id FROM customer_contacts
+                           WHERE customer_id = ? AND LOWER(TRIM(email)) = ?
+                           LIMIT 1""",
+                        (merge_into_id, email_key),
+                    ).fetchone()
+                    if into_row:
+                        conn.execute(
+                            """UPDATE bid_board_item_contacts
+                               SET customer_contact_id = ?
+                               WHERE customer_contact_id = ?""",
+                            (into_row["id"], fc["id"]),
+                        )
+                        conn.execute(
+                            """DELETE FROM bid_board_item_contacts WHERE id NOT IN (
+                                SELECT MIN(id) FROM bid_board_item_contacts
+                                GROUP BY board_item_id, customer_contact_id
+                            )"""
+                        )
+                    conn.execute("DELETE FROM customer_contacts WHERE id = ?", (fc["id"],))
+                else:
+                    conn.execute(
+                        "UPDATE customer_contacts SET customer_id = ? WHERE id = ?",
+                        (merge_into_id, fc["id"]),
+                    )
+                    if email_key:
+                        into_emails.add(email_key)
             conn.execute(
                 "DELETE FROM customers WHERE id = ?",
                 (merge_from_id,),
@@ -323,30 +467,48 @@ class Database:
     # ------------------------------------------------------------------
     # Bids
     # ------------------------------------------------------------------
+    def _insert_bid_rows(self, conn, bid_name: str, estimator: str, original_bid_date: str,
+                         notes: str, customer_ids: list, bid_total: float,
+                         solid_surf_sf: float = 0, stone_sf: float = 0,
+                         due_date: str = None, location: str = None) -> int:
+        """Insert a bid + its customer links + revision 1 using an existing connection.
+
+        Shared by add_bid() and log_board_item_bid() so normal bid creation
+        logic is never duplicated. Does not open/commit its own transaction.
+        """
+        due = (due_date or "").strip()[:10] or None
+        loc = (location or "").strip() or None
+        cur = conn.execute(
+            """INSERT INTO bids (bid_name, estimator, original_bid_date, notes, due_date, location)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (bid_name.strip(), estimator.strip(), original_bid_date, notes, due, loc),
+        )
+        bid_id = cur.lastrowid
+
+        for cid in customer_ids:
+            conn.execute(
+                "INSERT INTO bid_customers (bid_id, customer_id) VALUES (?, ?)",
+                (bid_id, cid),
+            )
+
+        conn.execute(
+            """INSERT INTO bid_revisions
+               (bid_id, revision_no, revision_date, bid_total, solid_surf_sf, stone_sf)
+               VALUES (?, 1, ?, ?, ?, ?)""",
+            (bid_id, original_bid_date, bid_total, solid_surf_sf, stone_sf),
+        )
+        return bid_id
+
     def add_bid(self, bid_name: str, estimator: str, original_bid_date: str,
                 notes: str, customer_ids: list, bid_total: float,
-                solid_surf_sf: float = 0, stone_sf: float = 0) -> int:
+                solid_surf_sf: float = 0, stone_sf: float = 0,
+                due_date: str = None, location: str = None) -> int:
         with self._conn() as conn:
-            cur = conn.execute(
-                """INSERT INTO bids (bid_name, estimator, original_bid_date, notes)
-                   VALUES (?, ?, ?, ?)""",
-                (bid_name.strip(), estimator.strip(), original_bid_date, notes),
+            return self._insert_bid_rows(
+                conn, bid_name, estimator, original_bid_date, notes,
+                customer_ids, bid_total, solid_surf_sf, stone_sf,
+                due_date=due_date, location=location,
             )
-            bid_id = cur.lastrowid
-
-            for cid in customer_ids:
-                conn.execute(
-                    "INSERT INTO bid_customers (bid_id, customer_id) VALUES (?, ?)",
-                    (bid_id, cid),
-                )
-
-            conn.execute(
-                """INSERT INTO bid_revisions
-                   (bid_id, revision_no, revision_date, bid_total, solid_surf_sf, stone_sf)
-                   VALUES (?, 1, ?, ?, ?, ?)""",
-                (bid_id, original_bid_date, bid_total, solid_surf_sf, stone_sf),
-            )
-            return bid_id
 
     def get_bids(self, search="", estimator="", status="", year=""):
         """Return list of bid dicts with latest revision data and customer names."""
@@ -393,12 +555,16 @@ class Database:
             return dict(row) if row else None
 
     def update_bid(self, bid_id: int, bid_name: str, estimator: str,
-                   original_bid_date: str, notes: str, customer_ids: list):
+                   original_bid_date: str, notes: str, customer_ids: list,
+                   due_date: str = None, location: str = None):
+        due = (due_date or "").strip()[:10] or None
+        loc = (location or "").strip() or None
         with self._conn() as conn:
             conn.execute(
-                """UPDATE bids SET bid_name=?, estimator=?, original_bid_date=?, notes=?
+                """UPDATE bids SET bid_name=?, estimator=?, original_bid_date=?, notes=?,
+                       due_date=?, location=?
                    WHERE id=?""",
-                (bid_name.strip(), estimator.strip(), original_bid_date, notes, bid_id),
+                (bid_name.strip(), estimator.strip(), original_bid_date, notes, due, loc, bid_id),
             )
             conn.execute("DELETE FROM bid_customers WHERE bid_id=?", (bid_id,))
             for cid in customer_ids:
@@ -533,6 +699,787 @@ class Database:
             ).fetchall()
             return [r["estimator"] for r in rows]
 
+    def get_all_estimator_names(self):
+        """Union of roster + historical bid + board-item estimator names."""
+        names = set()
+        for e in self.get_estimators():
+            if e and str(e).strip():
+                names.add(str(e).strip())
+        for e in self.get_board_estimators():
+            if e and str(e).strip():
+                names.add(str(e).strip())
+        for row in self.get_estimators_roster(active_only=False):
+            if row.get("name"):
+                names.add(row["name"].strip())
+        return sorted(names, key=lambda s: s.lower())
+
+    # ------------------------------------------------------------------
+    # Estimator roster (shared colors)
+    # ------------------------------------------------------------------
+    def _seed_estimators_if_empty(self, conn):
+        """One-time seed from distinct bid estimator names when roster is empty."""
+        count = conn.execute("SELECT COUNT(*) AS cnt FROM estimators").fetchone()["cnt"]
+        if count:
+            return
+        try:
+            from config import get_estimator_colors, _auto_color_for
+            overrides = get_estimator_colors()
+        except Exception:
+            overrides = {}
+
+            def _auto_color_for(name):
+                palette = [
+                    "#4caf50", "#ff9800", "#e91e63", "#9c27b0", "#00bcd4",
+                    "#ffc107", "#8bc34a", "#ff5722", "#795548", "#607d8b",
+                ]
+                if not name:
+                    return "#6b6b6b"
+                return palette[sum(ord(ch) for ch in name) % len(palette)]
+
+        rows = conn.execute(
+            """SELECT DISTINCT estimator FROM bids
+               WHERE estimator IS NOT NULL AND TRIM(estimator) != ''
+               ORDER BY estimator COLLATE NOCASE"""
+        ).fetchall()
+        for i, row in enumerate(rows):
+            name = (row["estimator"] or "").strip()
+            if not name:
+                continue
+            color = overrides.get(name) or _auto_color_for(name)
+            conn.execute(
+                "INSERT OR IGNORE INTO estimators (name, color, active, sort_order) VALUES (?, ?, 1, ?)",
+                (name, color, i),
+            )
+
+    def get_estimators_roster(self, active_only=False):
+        with self._conn() as conn:
+            sql = "SELECT * FROM estimators WHERE 1=1"
+            if active_only:
+                sql += " AND active = 1"
+            sql += " ORDER BY sort_order ASC, name COLLATE NOCASE"
+            return [dict(r) for r in conn.execute(sql).fetchall()]
+
+    def get_estimator_color_map(self):
+        """{name: hex_color} from the shared roster."""
+        return {
+            r["name"]: r["color"]
+            for r in self.get_estimators_roster(active_only=False)
+            if r.get("name") and r.get("color")
+        }
+
+    def add_estimator(self, name: str, color: str = None):
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("Estimator name is required.")
+        if not color:
+            from config import _auto_color_for
+            color = _auto_color_for(name)
+        with self._conn() as conn:
+            existing = conn.execute(
+                "SELECT id FROM estimators WHERE LOWER(name) = LOWER(?)", (name,)
+            ).fetchone()
+            if existing:
+                raise ValueError(f"Estimator '{name}' already exists.")
+            row = conn.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 AS nxt FROM estimators").fetchone()
+            cur = conn.execute(
+                "INSERT INTO estimators (name, color, active, sort_order) VALUES (?, ?, 1, ?)",
+                (name, color, row["nxt"]),
+            )
+            return cur.lastrowid
+
+    def update_estimator(self, estimator_id: int, name: str = None, color: str = None, active=None):
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM estimators WHERE id = ?", (estimator_id,)).fetchone()
+            if not row:
+                raise ValueError("Estimator not found.")
+            new_name = (name if name is not None else row["name"]).strip()
+            new_color = color if color is not None else row["color"]
+            new_active = row["active"] if active is None else (1 if active else 0)
+            if not new_name:
+                raise ValueError("Estimator name is required.")
+            dup = conn.execute(
+                "SELECT id FROM estimators WHERE LOWER(name) = LOWER(?) AND id != ?",
+                (new_name, estimator_id),
+            ).fetchone()
+            if dup:
+                raise ValueError(f"Estimator '{new_name}' already exists.")
+            conn.execute(
+                "UPDATE estimators SET name=?, color=?, active=? WHERE id=?",
+                (new_name, new_color, new_active, estimator_id),
+            )
+
+    def delete_estimator(self, estimator_id: int):
+        with self._conn() as conn:
+            conn.execute("DELETE FROM estimators WHERE id = ?", (estimator_id,))
+
+    def pull_estimators_from_bids(self):
+        """Insert any bid/board estimator names missing from the roster. Returns count added."""
+        from config import get_estimator_colors, _auto_color_for
+        overrides = get_estimator_colors()
+        names = set()
+        for e in self.get_estimators():
+            if e and str(e).strip():
+                names.add(str(e).strip())
+        for e in self.get_board_estimators():
+            if e and str(e).strip():
+                names.add(str(e).strip())
+        added = 0
+        with self._conn() as conn:
+            existing = {
+                (r["name"] or "").strip().lower()
+                for r in conn.execute("SELECT name FROM estimators").fetchall()
+            }
+            row = conn.execute("SELECT COALESCE(MAX(sort_order), -1) AS mx FROM estimators").fetchone()
+            nxt = row["mx"] + 1
+            for name in sorted(names, key=lambda s: s.lower()):
+                if name.lower() in existing:
+                    continue
+                color = overrides.get(name) or _auto_color_for(name)
+                conn.execute(
+                    "INSERT OR IGNORE INTO estimators (name, color, active, sort_order) VALUES (?, ?, 1, ?)",
+                    (name, color, nxt),
+                )
+                nxt += 1
+                added += 1
+        return added
+
+    # ------------------------------------------------------------------
+    # Customer contacts (account emails)
+    # ------------------------------------------------------------------
+    def get_customer_contacts(self, customer_id: int, active_only=False):
+        with self._conn() as conn:
+            sql = "SELECT * FROM customer_contacts WHERE customer_id = ?"
+            params = [customer_id]
+            if active_only:
+                sql += " AND active = 1"
+            sql += " ORDER BY name COLLATE NOCASE, email COLLATE NOCASE"
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def add_customer_contact(self, customer_id: int, email: str, name: str = ""):
+        email = (email or "").strip()
+        name = (name or "").strip()
+        if not email:
+            raise ValueError("Email is required.")
+        with self._conn() as conn:
+            existing = conn.execute(
+                """SELECT id FROM customer_contacts
+                   WHERE customer_id = ? AND LOWER(TRIM(email)) = LOWER(?)""",
+                (customer_id, email),
+            ).fetchone()
+            if existing:
+                return existing["id"]
+            cur = conn.execute(
+                "INSERT INTO customer_contacts (customer_id, email, name, active) VALUES (?, ?, ?, 1)",
+                (customer_id, email, name or None),
+            )
+            return cur.lastrowid
+
+    def update_customer_contact(self, contact_id: int, email: str, name: str = "", active=None):
+        email = (email or "").strip()
+        name = (name or "").strip()
+        if not email:
+            raise ValueError("Email is required.")
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM customer_contacts WHERE id = ?", (contact_id,)).fetchone()
+            if not row:
+                raise ValueError("Contact not found.")
+            new_active = row["active"] if active is None else (1 if active else 0)
+            conn.execute(
+                "UPDATE customer_contacts SET email=?, name=?, active=? WHERE id=?",
+                (email, name or None, new_active, contact_id),
+            )
+
+    def delete_customer_contact(self, contact_id: int):
+        with self._conn() as conn:
+            conn.execute("DELETE FROM customer_contacts WHERE id = ?", (contact_id,))
+
+    def get_board_item_contacts(self, item_id: int):
+        """Recipients chosen for a board item, with company + email + name."""
+        with self._conn() as conn:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    """SELECT cc.id, cc.email, cc.name, cc.customer_id, c.name AS company_name
+                       FROM bid_board_item_contacts bic
+                       JOIN customer_contacts cc ON cc.id = bic.customer_contact_id
+                       JOIN customers c ON c.id = cc.customer_id
+                       WHERE bic.board_item_id = ?
+                       ORDER BY c.name COLLATE NOCASE, cc.name COLLATE NOCASE, cc.email COLLATE NOCASE""",
+                    (item_id,),
+                ).fetchall()
+            ]
+
+    def set_board_item_contacts(self, item_id: int, contact_ids: list):
+        contact_ids = list(dict.fromkeys(int(cid) for cid in (contact_ids or [])))
+        with self._conn() as conn:
+            conn.execute("DELETE FROM bid_board_item_contacts WHERE board_item_id = ?", (item_id,))
+            for cid in contact_ids:
+                conn.execute(
+                    "INSERT INTO bid_board_item_contacts (board_item_id, customer_contact_id) VALUES (?, ?)",
+                    (item_id, cid),
+                )
+
+    # ------------------------------------------------------------------
+    # Bid Board attachments / links
+    # ------------------------------------------------------------------
+    def add_board_attachment(self, item_id: int, kind: str, label: str, value: str) -> int:
+        kind = (kind or "").strip().lower()
+        if kind not in ("file", "link"):
+            raise ValueError("Attachment kind must be 'file' or 'link'.")
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Attachment value is required.")
+        with self._conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO bid_board_attachments (board_item_id, kind, label, value)
+                   VALUES (?, ?, ?, ?)""",
+                (item_id, kind, (label or "").strip() or None, value),
+            )
+            return cur.lastrowid
+
+    def get_board_attachments(self, item_id: int):
+        with self._conn() as conn:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    """SELECT * FROM bid_board_attachments
+                       WHERE board_item_id = ? ORDER BY id ASC""",
+                    (item_id,),
+                ).fetchall()
+            ]
+
+    def delete_board_attachment(self, attachment_id: int):
+        with self._conn() as conn:
+            conn.execute("DELETE FROM bid_board_attachments WHERE id = ?", (attachment_id,))
+
+    # ------------------------------------------------------------------
+    # Bid Board (Calendar) - separate from normal bids
+    # ------------------------------------------------------------------
+    UNASSIGNED = "__UNASSIGNED__"
+
+    @staticmethod
+    def _norm_estimator(estimator):
+        """Normalize an estimator value to a stripped name or None (unassigned)."""
+        if estimator is None:
+            return None
+        estimator = str(estimator).strip()
+        return estimator or None
+
+    def add_board_item(self, bid_name: str, board_date: str, actual_due_date=None,
+                       actual_due_time=None, estimator=None, notes: str = "",
+                       customer_ids: list = None, location: str = None) -> int:
+        """Create a new Bid Board item. Defaults to IN_PROGRESS / Unassigned."""
+        customer_ids = customer_ids or []
+        loc = (location or "").strip() or None
+        with self._conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO bid_board_items
+                   (bid_name, board_date, actual_due_date, actual_due_time,
+                    estimator, board_status, notes, location)
+                   VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?)""",
+                (bid_name.strip(), board_date, actual_due_date or None,
+                 actual_due_time or None, self._norm_estimator(estimator), notes or "", loc),
+            )
+            item_id = cur.lastrowid
+            for cid in customer_ids:
+                conn.execute(
+                    "INSERT INTO bid_board_item_customers (board_item_id, customer_id) VALUES (?, ?)",
+                    (item_id, cid),
+                )
+            return item_id
+
+    def update_board_item(self, item_id: int, bid_name: str, board_date: str,
+                         actual_due_date=None, actual_due_time=None, estimator=None,
+                         notes: str = "", customer_ids: list = None, location: str = None):
+        """Update editable fields of a board item. Does NOT touch board_status,
+        completed_at, or created_bid_id (status changes go through their own paths)."""
+        customer_ids = customer_ids or []
+        loc = (location or "").strip() or None
+        with self._conn() as conn:
+            conn.execute(
+                """UPDATE bid_board_items
+                   SET bid_name=?, board_date=?, actual_due_date=?, actual_due_time=?,
+                       estimator=?, notes=?, location=?, updated_at=datetime('now')
+                   WHERE id=?""",
+                (bid_name.strip(), board_date, actual_due_date or None,
+                 actual_due_time or None, self._norm_estimator(estimator),
+                 notes or "", loc, item_id),
+            )
+            conn.execute("DELETE FROM bid_board_item_customers WHERE board_item_id=?", (item_id,))
+            for cid in customer_ids:
+                conn.execute(
+                    "INSERT INTO bid_board_item_customers (board_item_id, customer_id) VALUES (?, ?)",
+                    (item_id, cid),
+                )
+
+    def update_board_item_date(self, item_id: int, board_date: str):
+        """Drag-and-drop: move a card to a new Board Date only. Never touches
+        actual_due_date, status, the linked bid, or Moraware."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE bid_board_items SET board_date=?, updated_at=datetime('now') WHERE id=?",
+                (board_date, item_id),
+            )
+
+    def assign_board_item(self, item_id: int, estimator=None):
+        """Assign/unassign the estimator on a board item (assignment only)."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE bid_board_items SET estimator=?, updated_at=datetime('now') WHERE id=?",
+                (self._norm_estimator(estimator), item_id),
+            )
+
+    def set_board_item_status(self, item_id: int, status: str):
+        """Set IN_PROGRESS or NOT_BIDDING. COMPLETE uses mark_board_item_complete()."""
+        if status not in ("IN_PROGRESS", "NOT_BIDDING"):
+            raise ValueError(
+                "Board status can only be set to IN_PROGRESS or NOT_BIDDING here; "
+                "COMPLETE uses mark_board_item_complete()."
+            )
+        extra = ", completed_at=NULL" if status == "IN_PROGRESS" else ""
+        with self._conn() as conn:
+            conn.execute(
+                f"""UPDATE bid_board_items
+                    SET board_status=?, updated_at=datetime('now'){extra}
+                    WHERE id=?""",
+                (status, item_id),
+            )
+
+    def get_board_item(self, item_id: int):
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT bbi.*, GROUP_CONCAT(c.name, ', ') AS customer_names,
+                          (SELECT COUNT(*) FROM bid_board_attachments a
+                           WHERE a.board_item_id = bbi.id) AS attachment_count,
+                          (SELECT COUNT(*) FROM bid_board_item_contacts rc
+                           WHERE rc.board_item_id = bbi.id) AS recipient_count,
+                          (SELECT COUNT(*) FROM bid_board_item_bids lb
+                           WHERE lb.board_item_id = bbi.id) AS linked_bid_count
+                   FROM bid_board_items bbi
+                   LEFT JOIN bid_board_item_customers bic ON bic.board_item_id = bbi.id
+                   LEFT JOIN customers c ON c.id = bic.customer_id
+                   WHERE bbi.id = ?
+                   GROUP BY bbi.id""",
+                (item_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_board_item_customers(self, item_id: int):
+        with self._conn() as conn:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    """SELECT c.* FROM customers c
+                       JOIN bid_board_item_customers bic ON bic.customer_id = c.id
+                       WHERE bic.board_item_id = ?
+                       ORDER BY c.name COLLATE NOCASE""",
+                    (item_id,),
+                ).fetchall()
+            ]
+
+    def get_board_items(self, start_date: str, end_date: str,
+                       estimator=None, statuses=None):
+        """Return board items whose board_date falls in [start_date, end_date].
+
+        estimator: None = all; Database.UNASSIGNED = estimator IS NULL; else exact name.
+        statuses:  None = all; otherwise a list of board_status values to include.
+        """
+        with self._conn() as conn:
+            sql = """
+                SELECT bbi.*, GROUP_CONCAT(c.name, ', ') AS customer_names,
+                       (SELECT COUNT(*) FROM bid_board_attachments a
+                        WHERE a.board_item_id = bbi.id) AS attachment_count,
+                       (SELECT COUNT(*) FROM bid_board_item_contacts rc
+                        WHERE rc.board_item_id = bbi.id) AS recipient_count,
+                       (SELECT COUNT(*) FROM bid_board_item_bids lb
+                        WHERE lb.board_item_id = bbi.id) AS linked_bid_count
+                FROM bid_board_items bbi
+                LEFT JOIN bid_board_item_customers bic ON bic.board_item_id = bbi.id
+                LEFT JOIN customers c ON c.id = bic.customer_id
+                WHERE bbi.board_date >= ? AND bbi.board_date <= ?
+            """
+            params = [start_date, end_date]
+
+            if estimator == self.UNASSIGNED:
+                sql += " AND bbi.estimator IS NULL"
+            elif estimator:
+                sql += " AND bbi.estimator = ?"
+                params.append(estimator)
+
+            if statuses:
+                placeholders = ", ".join("?" for _ in statuses)
+                sql += f" AND bbi.board_status IN ({placeholders})"
+                params.extend(statuses)
+
+            sql += " GROUP BY bbi.id ORDER BY bbi.board_date ASC, bbi.id ASC"
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def search_board_items(self, query: str, limit: int = 80, *, quick: bool = False):
+        """Find board items by name/account/estimator/notes/location (includes COMPLETE).
+
+        quick=True skips notes/source-notes (faster typeahead; still matches name/account/etc.).
+        """
+        q = (query or "").strip()
+        if not q:
+            return []
+        like = f"%{q}%"
+        if quick:
+            sql = """SELECT bbi.id, bbi.bid_name, bbi.board_date, bbi.estimator,
+                            bbi.board_status, bbi.location,
+                            GROUP_CONCAT(c.name, ', ') AS customer_names
+                     FROM bid_board_items bbi
+                     LEFT JOIN bid_board_item_customers bic ON bic.board_item_id = bbi.id
+                     LEFT JOIN customers c ON c.id = bic.customer_id
+                     WHERE bbi.bid_name LIKE ?
+                        OR IFNULL(bbi.estimator, '') LIKE ?
+                        OR IFNULL(bbi.location, '') LIKE ?
+                        OR IFNULL(c.name, '') LIKE ?
+                     GROUP BY bbi.id
+                     ORDER BY bbi.board_date DESC, bbi.id DESC
+                     LIMIT ?"""
+            params = (like, like, like, like, int(limit))
+        else:
+            sql = """SELECT bbi.*, GROUP_CONCAT(c.name, ', ') AS customer_names,
+                              (SELECT COUNT(*) FROM bid_board_item_bids lb
+                               WHERE lb.board_item_id = bbi.id) AS linked_bid_count
+                       FROM bid_board_items bbi
+                       LEFT JOIN bid_board_item_customers bic ON bic.board_item_id = bbi.id
+                       LEFT JOIN customers c ON c.id = bic.customer_id
+                       WHERE bbi.bid_name LIKE ?
+                          OR IFNULL(bbi.estimator, '') LIKE ?
+                          OR IFNULL(bbi.notes, '') LIKE ?
+                          OR IFNULL(bbi.outlook_source_notes, '') LIKE ?
+                          OR IFNULL(bbi.location, '') LIKE ?
+                          OR IFNULL(c.name, '') LIKE ?
+                       GROUP BY bbi.id
+                       ORDER BY bbi.board_date DESC, bbi.id DESC
+                       LIMIT ?"""
+            params = (like, like, like, like, like, like, int(limit))
+        with self._conn() as conn:
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def count_board_items_by_estimator(self, start_date: str, end_date: str, statuses=None):
+        """Return {estimator_or_Unassigned: count} for the board_date window."""
+        with self._conn() as conn:
+            sql = """
+                SELECT CASE
+                         WHEN estimator IS NULL OR TRIM(estimator) = '' THEN 'Unassigned'
+                         ELSE estimator
+                       END AS est_key,
+                       COUNT(*) AS cnt
+                FROM bid_board_items
+                WHERE board_date >= ? AND board_date <= ?
+            """
+            params = [start_date, end_date]
+            if statuses:
+                placeholders = ", ".join("?" for _ in statuses)
+                sql += f" AND board_status IN ({placeholders})"
+                params.extend(statuses)
+            sql += " GROUP BY est_key ORDER BY cnt DESC, est_key COLLATE NOCASE"
+            return [(r["est_key"], int(r["cnt"])) for r in conn.execute(sql, params).fetchall()]
+
+    def get_board_estimators(self):
+        """Distinct non-null estimators currently used on board items."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """SELECT DISTINCT estimator FROM bid_board_items
+                   WHERE estimator IS NOT NULL AND TRIM(estimator) != ''
+                   ORDER BY estimator COLLATE NOCASE"""
+            ).fetchall()
+            return [r["estimator"] for r in rows]
+
+    def get_board_item_bids(self, item_id: int):
+        """Normal BidTracker bids linked to a board opportunity (not revisions)."""
+        with self._conn() as conn:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    """SELECT b.*,
+                              r.bid_total, r.solid_surf_sf, r.stone_sf, r.revision_no,
+                              GROUP_CONCAT(c.name, ', ') AS customer_names,
+                              lb.created_at AS linked_at
+                       FROM bid_board_item_bids lb
+                       JOIN bids b ON b.id = lb.bid_id
+                       LEFT JOIN (
+                           SELECT br.*
+                           FROM bid_revisions br
+                           INNER JOIN (
+                               SELECT bid_id, MAX(revision_no) AS max_rev
+                               FROM bid_revisions GROUP BY bid_id
+                           ) latest ON br.bid_id = latest.bid_id
+                                   AND br.revision_no = latest.max_rev
+                       ) r ON r.bid_id = b.id
+                       LEFT JOIN bid_customers bc ON bc.bid_id = b.id
+                       LEFT JOIN customers c ON c.id = bc.customer_id
+                       WHERE lb.board_item_id = ?
+                       GROUP BY b.id
+                       ORDER BY lb.id ASC""",
+                    (item_id,),
+                ).fetchall()
+            ]
+
+    def log_board_item_bid(self, item_id: int, bid_name: str, estimator: str,
+                           original_bid_date: str, notes: str, customer_ids: list,
+                           bid_total: float, solid_surf_sf: float = 0,
+                           stone_sf: float = 0, due_date: str = None,
+                           location: str = None) -> int:
+        """Create one normal bid and link it to the board item in one transaction.
+
+        Does not mark the board item COMPLETE. A second call creates a second bid.
+        Partial failure rolls back so a retry cannot leave an unlinked orphan bid.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM bid_board_items WHERE id = ?", (item_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Bid Board item {item_id} not found.")
+            bid_id = self._insert_bid_rows(
+                conn, bid_name, estimator, original_bid_date, notes,
+                customer_ids, bid_total, solid_surf_sf, stone_sf,
+                due_date=due_date, location=location,
+            )
+            conn.execute(
+                """INSERT INTO bid_board_item_bids (board_item_id, bid_id)
+                   VALUES (?, ?)""",
+                (item_id, bid_id),
+            )
+            return bid_id
+
+    def link_existing_board_bid(self, item_id: int, bid_id: int) -> int:
+        """Attach an existing normal bid to a board item. Does not change board status."""
+        item_id = int(item_id)
+        bid_id = int(bid_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM bid_board_items WHERE id = ?", (item_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Bid Board item {item_id} not found.")
+            bid = conn.execute("SELECT id FROM bids WHERE id = ?", (bid_id,)).fetchone()
+            if bid is None:
+                raise ValueError(f"Bid {bid_id} was not found.")
+            existing = conn.execute(
+                """SELECT id FROM bid_board_item_bids
+                   WHERE board_item_id = ? AND bid_id = ?""",
+                (item_id, bid_id),
+            ).fetchone()
+            if existing:
+                return bid_id
+            conn.execute(
+                """INSERT INTO bid_board_item_bids (board_item_id, bid_id)
+                   VALUES (?, ?)""",
+                (item_id, bid_id),
+            )
+            return bid_id
+
+    def unlink_board_item_bid(self, item_id: int, bid_id: int):
+        """Remove the join only. Does not delete the normal bid or change board status."""
+        with self._conn() as conn:
+            conn.execute(
+                """DELETE FROM bid_board_item_bids
+                   WHERE board_item_id = ? AND bid_id = ?""",
+                (int(item_id), int(bid_id)),
+            )
+
+    def find_bids_for_board_link(self, item_id: int, search: str = "", near_date: str = None):
+        """Bids not yet linked to this card, nearby original_bid_date first."""
+        from datetime import date as date_cls
+
+        linked_ids = {int(b["id"]) for b in self.get_board_item_bids(item_id) if b.get("id")}
+        rows = [r for r in self.get_bids(search=search or "") if int(r.get("id") or 0) not in linked_ids]
+        near = None
+        raw_near = (near_date or "")[:10]
+        if len(raw_near) == 10:
+            try:
+                near = date_cls.fromisoformat(raw_near)
+            except ValueError:
+                near = None
+
+        def _score(r):
+            raw = (r.get("original_bid_date") or "")[:10]
+            try:
+                d = date_cls.fromisoformat(raw)
+            except ValueError:
+                return (1, 99999, (r.get("bid_name") or "").lower())
+            delta = abs((d - near).days) if near else 99999
+            return (0, delta, (r.get("bid_name") or "").lower())
+
+        rows.sort(key=_score)
+        return rows
+
+    def get_board_item_by_outlook_event(self, calendar_id: str, event_id: str):
+        calendar_id = (calendar_id or "").strip()
+        event_id = (event_id or "").strip()
+        if not calendar_id or not event_id:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT bbi.*,
+                          (SELECT COUNT(*) FROM bid_board_item_bids lb
+                           WHERE lb.board_item_id = bbi.id) AS linked_bid_count
+                   FROM bid_board_items bbi
+                   WHERE bbi.outlook_calendar_id = ? AND bbi.outlook_event_id = ?""",
+                (calendar_id, event_id),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_outlook_board_item(
+        self,
+        calendar_id: str,
+        event_id: str,
+        bid_name: str,
+        board_date: str,
+        estimator=None,
+        board_status: str = "IN_PROGRESS",
+        location: str = None,
+        source_notes: str = None,
+        last_modified: str = None,
+    ) -> tuple:
+        """Insert or update an Outlook-sourced board item.
+
+        Updates only Outlook-managed fields. Returns (item_id, created_bool).
+        """
+        calendar_id = (calendar_id or "").strip()
+        event_id = (event_id or "").strip()
+        if not calendar_id or not event_id:
+            raise ValueError("Outlook calendar id and event id are required.")
+        bid_name = (bid_name or "").strip() or "(No subject)"
+        if board_status not in ("IN_PROGRESS", "COMPLETE", "NOT_BIDDING"):
+            board_status = "IN_PROGRESS"
+        loc = (location or "").strip() or None
+        notes = (source_notes or "").strip() or None
+        estimator = self._norm_estimator(estimator)
+        existing = self.get_board_item_by_outlook_event(calendar_id, event_id)
+        with self._conn() as conn:
+            if existing:
+                completed_sql = ""
+                if board_status == "COMPLETE" and existing.get("board_status") != "COMPLETE":
+                    completed_sql = ", completed_at=COALESCE(completed_at, datetime('now'))"
+                conn.execute(
+                    f"""UPDATE bid_board_items
+                        SET bid_name=?, board_date=?, estimator=?, board_status=?,
+                            location=?, outlook_source_notes=?,
+                            outlook_last_modified=?, outlook_last_synced=datetime('now'),
+                            source='OUTLOOK', updated_at=datetime('now')
+                            {completed_sql}
+                        WHERE id=?""",
+                    (
+                        bid_name, board_date, estimator, board_status, loc, notes,
+                        last_modified or None, existing["id"],
+                    ),
+                )
+                return existing["id"], False
+            if board_status == "COMPLETE":
+                cur = conn.execute(
+                    """INSERT INTO bid_board_items
+                       (bid_name, board_date, estimator, board_status, notes, location,
+                        source, outlook_event_id, outlook_calendar_id,
+                        outlook_last_modified, outlook_last_synced, outlook_source_notes,
+                        completed_at)
+                       VALUES (?, ?, ?, ?, '', ?, 'OUTLOOK', ?, ?, ?, datetime('now'), ?,
+                               datetime('now'))""",
+                    (
+                        bid_name, board_date, estimator, board_status, loc,
+                        event_id, calendar_id, last_modified or None, notes,
+                    ),
+                )
+            else:
+                cur = conn.execute(
+                    """INSERT INTO bid_board_items
+                       (bid_name, board_date, estimator, board_status, notes, location,
+                        source, outlook_event_id, outlook_calendar_id,
+                        outlook_last_modified, outlook_last_synced, outlook_source_notes)
+                       VALUES (?, ?, ?, ?, '', ?, 'OUTLOOK', ?, ?, ?, datetime('now'), ?)""",
+                    (
+                        bid_name, board_date, estimator, board_status, loc,
+                        event_id, calendar_id, last_modified or None, notes,
+                    ),
+                )
+            return cur.lastrowid, True
+
+    def apply_board_item_outlook_hints(
+        self, item_id: int, actual_due_date: str = None, customer_ids: list = None
+    ) -> dict:
+        """Fill empty Actual Due Date / Accounts only. Never overwrite existing values."""
+        item_id = int(item_id)
+        applied = {"due_date": False, "customers": 0}
+        due = (actual_due_date or "").strip()[:10] or None
+        if due and len(due) != 10:
+            due = None
+        ids = []
+        for cid in customer_ids or []:
+            try:
+                ids.append(int(cid))
+            except (TypeError, ValueError):
+                pass
+        ids = list(dict.fromkeys(ids))
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id, actual_due_date FROM bid_board_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Bid Board item {item_id} not found.")
+            if due and not (row["actual_due_date"] or "").strip():
+                conn.execute(
+                    """UPDATE bid_board_items
+                       SET actual_due_date=?, updated_at=datetime('now')
+                       WHERE id=?""",
+                    (due, item_id),
+                )
+                applied["due_date"] = True
+            if ids:
+                existing = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM bid_board_item_customers WHERE board_item_id=?",
+                    (item_id,),
+                ).fetchone()
+                if int(existing["cnt"] or 0) == 0:
+                    for cid in ids:
+                        ok = conn.execute(
+                            "SELECT id FROM customers WHERE id = ?", (cid,)
+                        ).fetchone()
+                        if not ok:
+                            continue
+                        conn.execute(
+                            """INSERT INTO bid_board_item_customers
+                               (board_item_id, customer_id) VALUES (?, ?)""",
+                            (item_id, cid),
+                        )
+                        applied["customers"] += 1
+        return applied
+
+    def get_customer_email_index(self):
+        """Map lowercase email -> customer_id for Outlook body matching."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """SELECT LOWER(TRIM(email)) AS email, customer_id
+                   FROM customer_contacts
+                   WHERE email IS NOT NULL AND TRIM(email) != ''
+                     AND COALESCE(active, 1) = 1"""
+            ).fetchall()
+            return {r["email"]: r["customer_id"] for r in rows if r["email"]}
+
+    def mark_board_item_complete(self, item_id: int):
+        """Mark a board opportunity COMPLETE. Does not create bids."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id, board_status FROM bid_board_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Bid Board item {item_id} not found.")
+            if row["board_status"] == "COMPLETE":
+                return
+            conn.execute(
+                """UPDATE bid_board_items
+                   SET board_status='COMPLETE',
+                       completed_at=COALESCE(completed_at, datetime('now')),
+                       updated_at=datetime('now')
+                   WHERE id=?""",
+                (item_id,),
+            )
+
     def get_years(self):
         with self._conn() as conn:
             rows = conn.execute(
@@ -603,6 +1550,48 @@ class Database:
                 sql += " AND b.status = ?"
                 params.append(status)
             sql += " GROUP BY c.id ORDER BY bid_count DESC"
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_bids_by_location(self, date_from="", date_to="", estimator="", status=""):
+        """Group normal bids by free-text location (city)."""
+        with self._conn() as conn:
+            sql = """
+                SELECT CASE
+                         WHEN b.location IS NULL OR TRIM(b.location) = '' THEN '(No location)'
+                         ELSE TRIM(b.location)
+                       END AS location_name,
+                       LOWER(CASE
+                         WHEN b.location IS NULL OR TRIM(b.location) = '' THEN '(no location)'
+                         ELSE TRIM(b.location)
+                       END) AS location_key,
+                       COUNT(DISTINCT b.id) AS bid_count,
+                       SUM(CASE WHEN b.status='WON' THEN 1 ELSE 0 END) AS won_count,
+                       COALESCE(SUM(r.bid_total), 0) AS total_value
+                FROM bids b
+                LEFT JOIN (
+                    SELECT br.bid_id, br.bid_total
+                    FROM bid_revisions br
+                    INNER JOIN (
+                        SELECT bid_id, MAX(revision_no) AS max_rev
+                        FROM bid_revisions GROUP BY bid_id
+                    ) latest ON br.bid_id = latest.bid_id AND br.revision_no = latest.max_rev
+                ) r ON r.bid_id = b.id
+                WHERE COALESCE(b.bid_role, 'normal') != 'parent'
+            """
+            params = []
+            if date_from:
+                sql += " AND b.original_bid_date >= ?"
+                params.append(date_from)
+            if date_to:
+                sql += " AND b.original_bid_date <= ?"
+                params.append(date_to)
+            if estimator:
+                sql += " AND b.estimator = ?"
+                params.append(estimator)
+            if status:
+                sql += " AND b.status = ?"
+                params.append(status)
+            sql += " GROUP BY location_key ORDER BY bid_count DESC, location_name COLLATE NOCASE"
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
     def get_win_rate(self, date_from="", date_to=""):
